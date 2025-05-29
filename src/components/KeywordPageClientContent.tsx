@@ -123,46 +123,6 @@ export default function KeywordPageClientContent({
       setIsActionLoading((prev) => ({ ...prev, pageRefresh: false }));
     }
   };
-  const handleDeleteSingleFile = async (fileNameToDelete: string) => {
-    setIsActionLoading((prev) => ({ ...prev, [fileNameToDelete]: true }));
-    try {
-      console.log(`Deleting file: ${keyword}/${fileNameToDelete}`);
-      const deleteUrl = `/api/file/${keyword}/delete?fileName=${encodeURIComponent(
-        fileNameToDelete
-      )}`;
-      console.log(`Delete URL: ${deleteUrl}`);
-
-      const res = await fetch(deleteUrl, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(
-          result.error ||
-            `Failed to delete file: ${res.status} ${res.statusText}`
-        );
-      }
-
-      toast({
-        title: "File Deleted",
-        description: `"${fileNameToDelete}" removed from keyword "${keyword}".`,
-      });
-      await handleFetchFilesData();
-    } catch (e: any) {
-      console.error("Delete file error:", e);
-      toast({
-        title: "Deletion Failed",
-        description: e.message || "Could not delete file.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsActionLoading((prev) => ({ ...prev, [fileNameToDelete]: false }));
-    }
-  };
   const handleDeleteAllFiles = async () => {
     setIsActionLoading((prev) => ({ ...prev, deleteAll: true }));
     try {
@@ -342,8 +302,8 @@ export default function KeywordPageClientContent({
                         </Tooltip>
                       </div>
                       <div className="flex gap-2 mt-2 sm:mt-0 flex-shrink-0 w-full sm:w-auto">
+                        {" "}
                         <Tooltip>
-                          {" "}
                           <TooltipTrigger asChild>
                             <Button
                               variant="outline"
@@ -376,55 +336,6 @@ export default function KeywordPageClientContent({
                             Download {file.fileName}
                           </TooltipContent>
                         </Tooltip>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={isActionLoading[file.fileName]}
-                                  className="flex-1 sm:flex-none text-destructive border-destructive hover:bg-destructive/10"
-                                >
-                                  {isActionLoading[file.fileName] ? (
-                                    <Loader2 className="h-4 w-4 animate-spin sm:mr-1.5" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4 sm:mr-1.5" />
-                                  )}
-                                  <span className="hidden sm:inline">
-                                    Delete
-                                  </span>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">
-                                Delete {file.fileName}
-                              </TooltipContent>
-                            </Tooltip>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Delete "{file.fileName}"?
-                              </AlertDialogTitle>{" "}
-                              <AlertDialogDescription>
-                                This action will permanently delete the file "
-                                {file.fileName}" for keyword "{keyword}". This
-                                cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() =>
-                                  handleDeleteSingleFile(file.fileName)
-                                }
-                                className="bg-destructive hover:bg-destructive/90"
-                              >
-                                Yes, delete file
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
                       </div>
                     </CardContent>
                   </Card>
