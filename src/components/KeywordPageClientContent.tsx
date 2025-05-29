@@ -31,7 +31,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   
   useEffect(() => {
     if (initialFilesData === null || initialFilesData.length === 0) {
-      // If no initial real files, create a mock file for UI demonstration
       const mockDemoFile: StoredFile = {
         keyword: keyword,
         fileName: 'sample-demonstration-file.pdf',
@@ -61,11 +60,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       } else {
         const data: StoredFile[] = await res.json();
         setCurrentFiles(data);
-        // If, after fetching, there are no files (e.g., the mock file was "deleted" or real files were deleted),
-        // and initialFilesData was also empty, re-add mock file for persistent demo unless real files exist.
-        // This condition might be too aggressive if user genuinely wants to see an empty state.
-        // For now, let's assume if fetch returns empty, and initial was empty, we don't re-mock.
-        // The initial mock is for the very first load only.
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message || 'Failed to fetch files data.', variant: "destructive" });
@@ -78,6 +72,13 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   const handleDeleteSingleFile = async (fileNameToDelete: string) => {
     setIsActionLoading(prev => ({ ...prev, [fileNameToDelete]: true }));
     try {
+      // If it's the mock file, just remove it from the local state
+      if (fileNameToDelete === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0)) {
+        setCurrentFiles([]);
+        toast({ title: "Sample Cleared", description: "Sample demonstration file removed from view." });
+        return;
+      }
+
       const res = await fetch(`/api/file/${keyword}/delete?fileName=${encodeURIComponent(fileNameToDelete)}`, { method: 'DELETE' });
       const result = await res.json();
       if (!res.ok) {
@@ -101,12 +102,19 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         throw new Error(result.error || `Failed to delete all files: ${res.statusText}`);
       }
       toast({ title: "All Files Deleted", description: `All files for keyword "${keyword}" have been removed.` });
-      setCurrentFiles([]); // Clear files locally. If mock was shown, it will be cleared.
+      setCurrentFiles([]);
     } catch (e: any) {
       toast({ title: "Deletion Failed", description: e.message || 'Could not delete all files.', variant: "destructive" });
     } finally {
       setIsActionLoading(prev => ({ ...prev, deleteAll: false }));
     }
+  };
+
+  const handleDownloadAllFiles = () => {
+    toast({
+      title: "Conceptual Download",
+      description: "Downloading all files as a single archive is a conceptual feature. Actual implementation would require backend support for zipping files.",
+    });
   };
 
   if (isLoadingPage || isActionLoading['pageRefresh']) {
@@ -119,6 +127,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   }
 
   const getConceptualDownloadUrl = (fileName: string) => `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`;
+  const isMockFileDisplayed = currentFiles.length === 1 && currentFiles[0].fileName === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0);
 
   return (
     <div className="max-w-3xl mx-auto py-8">
@@ -135,34 +144,51 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       {currentFiles && currentFiles.length > 0 ? (
         <Card className="mb-8 shadow-xl border-primary/20">
           <CardHeader>
-            <CardTitle className="text-2xl text-primary flex items-center justify-between">
-              <span>Stored Files ({currentFiles.length})</span>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={isActionLoading['deleteAll'] || currentFiles.length === 0 || (currentFiles.length === 1 && currentFiles[0].fileName === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0)) }>
-                    {isActionLoading['deleteAll'] ? <Loader2 className="animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                    Delete All Files
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action will permanently delete all {currentFiles.length} file(s) for keyword "{keyword}". This cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteAllFiles} className="bg-destructive hover:bg-destructive/90">
-                      Yes, delete all
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </CardTitle>
-            <CardDescription>
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-2xl text-primary">
+                Stored Files ({currentFiles.length})
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleDownloadAllFiles}
+                  disabled={isActionLoading['downloadAll'] || currentFiles.length === 0 || isMockFileDisplayed}
+                >
+                  {isActionLoading['downloadAll'] ? <Loader2 className="animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
+                  Download All
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      disabled={isActionLoading['deleteAll'] || currentFiles.length === 0 || isMockFileDisplayed }
+                    >
+                      {isActionLoading['deleteAll'] ? <Loader2 className="animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                      Delete All
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action will permanently delete all {currentFiles.length} file(s) for keyword "{keyword}". This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDeleteAllFiles} className="bg-destructive hover:bg-destructive/90">
+                        Yes, delete all
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+            <CardDescription className="mt-2">
               Below are the files currently associated with the keyword "{keyword}".
-              {(initialFilesData === null || initialFilesData.length === 0) && currentFiles.length === 1 && currentFiles[0].fileName === 'sample-demonstration-file.pdf' && (
+              {isMockFileDisplayed && (
                 <span className="block text-xs text-amber-600 mt-1"> (This is a sample file for demonstration purposes as no real files were found for this keyword.)</span>
               )}
             </CardDescription>
@@ -201,7 +227,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                             <AlertDialogTitle>Delete "{file.fileName}"?</AlertDialogTitle>
                             <AlertDialogDescription>
                             This action will permanently delete the file "{file.fileName}" for keyword "{keyword}".
-                            {file.fileName === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0) && " This is a sample file; deleting it here will remove it from the view. Real files require backend deletion."}
+                            {file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed && " This is a sample file; deleting it here will remove it from the view. Real files require backend deletion."}
                             This cannot be undone for real files.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
@@ -265,4 +291,3 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     </div>
   );
 }
-
