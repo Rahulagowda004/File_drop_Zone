@@ -12,15 +12,14 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 
 interface KeywordPageClientContentProps {
-  initialFilesData: StoredFile[] | null; // Can be null if keyword not found, or empty array if keyword exists with no files
+  initialFilesData: StoredFile[] | null;
   keyword: string;
 }
 
 export default function KeywordPageClientContent({ initialFilesData, keyword }: KeywordPageClientContentProps) {
   const [currentFiles, setCurrentFiles] = useState<StoredFile[]>(initialFilesData || []);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
-  const [isActionLoading, setIsActionLoading] = useState<{ [key: string]: boolean }>({}); // For specific file actions like delete, or 'deleteAll'
-  const [showUploadOverride, setShowUploadOverride] = useState(false); // To force show upload form if needed
+  const [isActionLoading, setIsActionLoading] = useState<{ [key: string]: boolean }>({});
   const { toast } = useToast();
   const [baseUrl, setBaseUrl] = useState('');
 
@@ -32,7 +31,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   
   useEffect(() => {
     setCurrentFiles(initialFilesData || []);
-    setShowUploadOverride(initialFilesData === null || (Array.isArray(initialFilesData) && initialFilesData.length === 0));
     setIsLoadingPage(false);
   }, [initialFilesData, keyword]);
 
@@ -40,23 +38,21 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     setIsActionLoading(prev => ({ ...prev, pageRefresh: true }));
     try {
       const res = await fetch(`/api/file/${keyword}`, { cache: 'no-store' });
-      if (res.status === 404) {
-        setCurrentFiles([]);
-        setShowUploadOverride(true);
-      } else if (!res.ok) {
-        const errorData = await res.json();
-        toast({ title: "Error", description: errorData.error || `Failed to fetch files: ${res.statusText}`, variant: "destructive" });
-        setCurrentFiles([]);
-        setShowUploadOverride(true);
+      if (!res.ok) { // Covers 404 as well, which for this endpoint might mean no files or keyword gone
+        const errorData = await res.json().catch(() => ({ error: `Failed to fetch files: ${res.statusText}` }));
+        if (res.status === 404) {
+             setCurrentFiles([]); // Keyword exists but no files, or keyword gone
+        } else {
+            toast({ title: "Error", description: errorData.error || `Failed to fetch files: ${res.statusText}`, variant: "destructive" });
+            setCurrentFiles([]); // On error, assume no files can be shown
+        }
       } else {
         const data: StoredFile[] = await res.json();
         setCurrentFiles(data);
-        setShowUploadOverride(data.length === 0);
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message || 'Failed to fetch files data.', variant: "destructive" });
-      setCurrentFiles([]);
-      setShowUploadOverride(true);
+      setCurrentFiles([]); // On error, assume no files can be shown
     } finally {
       setIsActionLoading(prev => ({ ...prev, pageRefresh: false }));
     }
@@ -71,7 +67,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         throw new Error(result.error || `Failed to delete file: ${res.statusText}`);
       }
       toast({ title: "File Deleted", description: `"${fileNameToDelete}" removed from keyword "${keyword}".` });
-      await handleFetchFilesData(); // Refresh list
+      await handleFetchFilesData(); 
     } catch (e: any) {
       toast({ title: "Deletion Failed", description: e.message || 'Could not delete file.', variant: "destructive" });
     } finally {
@@ -89,7 +85,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       }
       toast({ title: "All Files Deleted", description: `All files for keyword "${keyword}" have been removed.` });
       setCurrentFiles([]);
-      setShowUploadOverride(true);
     } catch (e: any) {
       toast({ title: "Deletion Failed", description: e.message || 'Could not delete all files.', variant: "destructive" });
     } finally {
@@ -106,9 +101,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     );
   }
 
-  // Conceptual download link - actual serving is external
   const getConceptualDownloadUrl = (fileName: string) => `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`;
-
 
   return (
     <div className="max-w-3xl mx-auto py-8">
@@ -122,25 +115,14 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
           </p>
       </div>
 
-      {(!currentFiles || currentFiles.length === 0) && !showUploadOverride && (
-         <Card className="w-full shadow-lg border-primary/20 mb-8">
-            <CardHeader>
-                <CardTitle className="text-center">No Files Yet for "{keyword}"</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <p className="text-center text-muted-foreground">Upload a file below to get started.</p>
-            </CardContent>
-         </Card>
-      )}
-
-      {currentFiles && currentFiles.length > 0 && (
+      {currentFiles && currentFiles.length > 0 ? (
         <Card className="mb-8 shadow-xl border-primary/20">
           <CardHeader>
             <CardTitle className="text-2xl text-primary flex items-center justify-between">
               <span>Stored Files ({currentFiles.length})</span>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={isActionLoading['deleteAll']}>
+                  <Button variant="destructive" size="sm" disabled={isActionLoading['deleteAll'] || currentFiles.length === 0}>
                     {isActionLoading['deleteAll'] ? <Loader2 className="animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                     Delete All Files
                   </Button>
@@ -181,15 +163,15 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                         Conceptual Download: <Link href={getConceptualDownloadUrl(file.fileName)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{getConceptualDownloadUrl(file.fileName)}</Link>
                     </p>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0 sm:flex-col md:flex-row">
-                    <Button asChild variant="outline" size="sm">
+                  <div className="flex gap-2 flex-shrink-0 sm:flex-col md:flex-row items-stretch">
+                    <Button asChild variant="outline" size="sm" className="flex-grow sm:flex-grow-0">
                       <Link href={getConceptualDownloadUrl(file.fileName)} target="_blank" rel="noopener noreferrer">
                         <DownloadCloud className="h-4 w-4" /> <span className="ml-2 hidden sm:inline">Download</span>
                       </Link>
                     </Button>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                           <Button variant="destructive" size="sm" disabled={isActionLoading[file.fileName]}>
+                           <Button variant="destructive" size="sm" disabled={isActionLoading[file.fileName]} className="flex-grow sm:flex-grow-0">
                                 {isActionLoading[file.fileName] ? <Loader2 className="animate-spin" /> : <Trash2 className="h-4 w-4" />}
                                 <span className="ml-2 hidden sm:inline">Delete</span>
                             </Button>
@@ -219,25 +201,36 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
             </div>
           </CardContent>
         </Card>
+      ) : (
+        <Card className="w-full shadow-lg border-primary/20 mb-8">
+            <CardHeader>
+                <CardTitle className="text-center text-xl text-primary">No Files for "{keyword}"</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p className="text-center text-muted-foreground">
+                    There are currently no files associated with this keyword.
+                    You can upload files using the form below.
+                </p>
+            </CardContent>
+         </Card>
       )}
 
       <Card className="shadow-xl border-accent/20">
         <CardHeader>
             <CardTitle className="text-2xl text-accent flex items-center">
-                <UploadCloud className="mr-3 h-7 w-7" /> Add Another File to "{keyword}"
+                <UploadCloud className="mr-3 h-7 w-7" /> Add File(s) to "{keyword}"
             </CardTitle>
             <CardDescription>
-                Upload a new file to associate with this keyword. Ensure file names are unique for this keyword.
+                Upload new files to associate with this keyword. Ensure file names are unique for this keyword if replacing.
             </CardDescription>
         </CardHeader>
         <CardContent>
             <UploadForm
-            fixedKeyword={keyword}
-            onUploadSuccess={async (uploadedKeyword, uploadedFileName) => {
-                toast({ title: "Upload Successful", description: `File "${uploadedFileName}" added to keyword "${uploadedKeyword}".`});
-                await handleFetchFilesData(); // Refresh the list
-                setShowUploadOverride(false);
-            }}
+              fixedKeyword={keyword}
+              onUploadSuccess={async (uploadedKeyword, uploadedFileNamesSummary) => {
+                  toast({ title: "Upload Processed", description: `${uploadedFileNamesSummary} for keyword '${uploadedKeyword}'. Refreshing list...` });
+                  await handleFetchFilesData(); 
+              }}
             />
         </CardContent>
       </Card>
@@ -250,5 +243,3 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     </div>
   );
 }
-
-    

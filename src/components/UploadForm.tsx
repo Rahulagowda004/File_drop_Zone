@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
-import { UploadCloud, Link2, Loader2, AlertTriangle } from 'lucide-react';
+import { UploadCloud, Link2, Loader2, AlertTriangle, FileText } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -22,11 +23,11 @@ const formSchema = z.object({
     .regex(/^[a-zA-Z0-9_-]+$/, "Keyword can only contain letters, numbers, underscores, and hyphens."),
   file: z.custom<FileList>(
       (val) => typeof FileList !== 'undefined' && val instanceof FileList,
-      "Input must be a FileList." // This message might not be shown directly if refine fails first
+      "Input must be a FileList."
     )
     .refine((files) => files && files.length > 0, "At least one file is required.")
     .refine(
-      (files) => Array.from(files).every(file => file.size <= MAX_FILE_SIZE),
+      (files) => files && Array.from(files).every(file => file.size <= MAX_FILE_SIZE),
       `Max file size for each file is ${MAX_FILE_SIZE / (1024 * 1024)}MB.`
     ),
 });
@@ -53,7 +54,16 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     }
   });
 
-  const selectedFiles = watch('file');
+  const selectedFileList = watch('file');
+  const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (selectedFileList && selectedFileList.length > 0) {
+      setSelectedFileNames(Array.from(selectedFileList).map(f => f.name));
+    } else {
+      setSelectedFileNames([]);
+    }
+  }, [selectedFileList]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -71,6 +81,12 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     setIsLoading(true);
     setUploadedFileLink(null);
     setUploadSummary(null);
+
+    if (!data.file || data.file.length === 0) {
+      toast({ title: "No Files Selected", description: "Please select one or more files to upload.", variant: "destructive" });
+      setIsLoading(false);
+      return;
+    }
 
     const filesToUpload = Array.from(data.file);
     const keywordToSubmit = fixedKeyword || data.keyword;
@@ -101,41 +117,54 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     }
     
     setIsLoading(false);
-    reset({ keyword: fixedKeyword || '', file: undefined }); // Resetting FileList
+    reset({ keyword: fixedKeyword || '', file: undefined }); 
+    setSelectedFileNames([]); // Clear selected file names display
 
     if (onUploadSuccess) {
       if (successfulUploads.length > 0) {
+        // Call the callback with a summary of uploaded files.
         onUploadSuccess(keywordToSubmit, `${successfulUploads.length} file(s) including "${successfulUploads[0]}"`);
       }
-      if (failedUploads.length > 0) {
-        toast({
-            title: "Some Uploads Failed",
-            description: `${failedUploads.length} file(s) could not be uploaded. First failure: ${failedUploads[0].name} - ${failedUploads[0].error}`,
-            variant: "destructive",
-        });
-      } else if (successfulUploads.length > 0) {
-         toast({
-            title: "Upload Complete!",
-            description: `${successfulUploads.length} file(s) successfully added to keyword '${keywordToSubmit}'.`,
-        });
-      } else if (filesToUpload.length > 0) { // All failed, and there were files to upload
-         toast({
-            title: "Upload Failed",
-            description: `All ${filesToUpload.length} file(s) could not be uploaded. First error: ${failedUploads[0]?.error || 'Unknown error'}.`,
-            variant: "destructive",
-        });
+      // Toasts for fixedKeyword scenario are handled by KeywordPageClientContent based on the callback
+      // So, only show detailed toasts if NOT on a fixedKeyword page (i.e., on standalone /upload page)
+      if (!fixedKeyword) {
+        if (failedUploads.length > 0 && successfulUploads.length > 0) {
+           toast({
+              title: "Partial Upload Success",
+              description: `${successfulUploads.length} file(s) uploaded. ${failedUploads.length} file(s) failed. First failure: ${failedUploads[0].name} - ${failedUploads[0].error}`,
+              variant: "default", 
+          });
+        } else if (failedUploads.length > 0) {
+          toast({
+              title: "Some Uploads Failed",
+              description: `${failedUploads.length} file(s) could not be uploaded. First failure: ${failedUploads[0].name} - ${failedUploads[0].error}`,
+              variant: "destructive",
+          });
+        } else if (successfulUploads.length > 0) {
+           toast({
+              title: "Upload Complete!",
+              description: `${successfulUploads.length} file(s) successfully added to keyword '${keywordToSubmit}'.`,
+          });
+        } else if (filesToUpload.length > 0) { 
+           toast({
+              title: "Upload Failed",
+              description: `All ${filesToUpload.length} file(s) could not be uploaded. First error: ${failedUploads[0]?.error || 'Unknown error'}.`,
+              variant: "destructive",
+          });
+        }
       }
     } else {
       // Standalone /upload page behavior
       setUploadSummary({ success: successfulUploads, failed: failedUploads });
       if (successfulUploads.length > 0) {
         setUploadedFileLink(`/${keywordToSubmit}`);
-        toast({
-          title: "Uploads Processed",
-          description: `${successfulUploads.length} file(s) uploaded. ${failedUploads.length} file(s) failed.`,
-          variant: failedUploads.length > 0 ? "default" : "default", 
+        // Toast for standalone page
+         toast({
+          title: successfulUploads.length === filesToUpload.length ? "All Uploads Successful!" : "Uploads Processed",
+          description: `${successfulUploads.length} file(s) uploaded to keyword '${keywordToSubmit}'. ${failedUploads.length > 0 ? `${failedUploads.length} file(s) failed.` : ''}`,
+          variant: failedUploads.length > 0 ? "default" : "default",
         });
-      } else if (filesToUpload.length > 0) { // All failed on standalone page
+      } else if (filesToUpload.length > 0) { 
          toast({
           title: "All Uploads Failed",
           description: `Could not upload any of the selected files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
@@ -167,12 +196,27 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
           <Input 
             id="file-uploadform" 
             type="file"
-            multiple // Allow multiple file selection
+            multiple
             {...register('file')} 
-            className={`pt-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${selectedFiles && selectedFiles.length > 0 ? 'file:bg-accent file:text-accent-foreground' : 'file:bg-primary/10 file:text-primary hover:file:bg-primary/20'} ${errors.file ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}`}
+            className={`block w-full text-sm text-foreground
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-md file:border file:border-input
+                        file:bg-muted file:text-sm file:font-semibold
+                        file:text-foreground hover:file:bg-accent/80
+                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+                        disabled:cursor-not-allowed disabled:opacity-50
+                        ${errors.file ? 'border-destructive ring-destructive' : ''}`}
             aria-invalid={errors.file ? "true" : "false"}
           />
           {errors.file && <p className="text-sm text-destructive">{errors.file.message}</p>}
+          {selectedFileNames.length > 0 && (
+            <div className="mt-2 p-3 bg-muted/50 border border-border rounded-md text-sm text-muted-foreground">
+              <p className="font-medium mb-1">Selected files:</p>
+              <ul className="list-disc list-inside space-y-0.5 max-h-28 overflow-y-auto">
+                {selectedFileNames.map(name => <li key={name} className="truncate">{name}</li>)}
+              </ul>
+            </div>
+          )}
         </div>
 
         {uploadedFileLink && origin && !onUploadSuccess && uploadSummary && (
