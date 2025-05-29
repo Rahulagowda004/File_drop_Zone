@@ -144,8 +144,25 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
 
   return (
     <div className="max-w-3xl mx-auto py-8">
-      {/* The main heading section that was here has been removed */}
       
+      <Card className="w-full shadow-xl border-primary/20 mb-8">
+        <CardHeader>
+          <CardTitle className="text-2xl text-primary">Add File(s) to "{keyword}"</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <UploadForm
+            fixedKeyword={keyword}
+            onUploadSuccess={async (uploadedKeyword, summary) => {
+              toast({
+                title: "Upload Processed",
+                description: `${summary} for keyword "${uploadedKeyword}". Refreshing list...`,
+              });
+              await handleFetchFilesData(); // Refresh the list
+            }}
+          />
+        </CardContent>
+      </Card>
+
       {currentFiles && currentFiles.length > 0 ? (
         <Card className="mb-8 shadow-xl border-primary/20">
           <CardHeader>
@@ -260,33 +277,14 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
             <CardContent>
                 <p className="text-center text-muted-foreground">
                     There are currently no files associated with this keyword.
-                    You can add files using the form below.
+                    You can add files using the form above.
                 </p>
             </CardContent>
          </Card>
       )}
-
-      <Card className="w-full shadow-xl border-primary/20 mt-8">
-        <CardHeader>
-          <CardTitle className="text-2xl text-primary">Add File(s) to "{keyword}"</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <UploadForm
-            fixedKeyword={keyword}
-            onUploadSuccess={async (uploadedKeyword, summary) => {
-              toast({
-                title: "Upload Processed",
-                description: `${summary} for keyword "${uploadedKeyword}". Refreshing list...`,
-              });
-              await handleFetchFilesData(); // Refresh the list
-            }}
-          />
-        </CardContent>
-      </Card>
     </div>
   );
 }
     
 
     
-
