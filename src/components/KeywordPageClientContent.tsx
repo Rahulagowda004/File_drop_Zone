@@ -65,7 +65,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         const data: StoredFile[] = await res.json();
         setCurrentFiles(data);
       }
-    } catch (e: any) { // Added missing opening brace
+    } catch (e: any) {
       toast({ title: "Error", description: e.message || 'Failed to fetch files data.', variant: "destructive" });
       setCurrentFiles([]); // Clear files on error
     } finally {
@@ -202,9 +202,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
             </div>
             <CardDescription className="mt-2">
               Below are the files currently associated with the keyword "{keyword}".
-              {isMockFileDisplayed && (
-                <span className="block text-xs text-amber-600 mt-1"> (This is a sample file for demonstration purposes as no real files were found for this keyword.)</span>
-              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
