@@ -17,7 +17,7 @@ interface KeywordPageClientContentProps {
 }
 
 export default function KeywordPageClientContent({ initialFilesData, keyword }: KeywordPageClientContentProps) {
-  const [currentFiles, setCurrentFiles] = useState<StoredFile[]>(initialFilesData || []);
+  const [currentFiles, setCurrentFiles] = useState<StoredFile[]>([]);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState<{ [key: string]: boolean }>({});
   const { toast } = useToast();
@@ -30,7 +30,19 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   }, []);
   
   useEffect(() => {
-    setCurrentFiles(initialFilesData || []);
+    if (initialFilesData === null || initialFilesData.length === 0) {
+      // If no initial real files, create a mock file for UI demonstration
+      const mockDemoFile: StoredFile = {
+        keyword: keyword,
+        fileName: 'sample-demonstration-file.pdf',
+        contentType: 'application/pdf',
+        size: 780 * 1024, // 780KB
+        uploadedAt: new Date(),
+      };
+      setCurrentFiles([mockDemoFile]);
+    } else {
+      setCurrentFiles(initialFilesData);
+    }
     setIsLoadingPage(false);
   }, [initialFilesData, keyword]);
 
@@ -38,21 +50,26 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     setIsActionLoading(prev => ({ ...prev, pageRefresh: true }));
     try {
       const res = await fetch(`/api/file/${keyword}`, { cache: 'no-store' });
-      if (!res.ok) { // Covers 404 as well, which for this endpoint might mean no files or keyword gone
+      if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: `Failed to fetch files: ${res.statusText}` }));
         if (res.status === 404) {
-             setCurrentFiles([]); // Keyword exists but no files, or keyword gone
+             setCurrentFiles([]); 
         } else {
             toast({ title: "Error", description: errorData.error || `Failed to fetch files: ${res.statusText}`, variant: "destructive" });
-            setCurrentFiles([]); // On error, assume no files can be shown
+            setCurrentFiles([]); 
         }
       } else {
         const data: StoredFile[] = await res.json();
         setCurrentFiles(data);
+        // If, after fetching, there are no files (e.g., the mock file was "deleted" or real files were deleted),
+        // and initialFilesData was also empty, re-add mock file for persistent demo unless real files exist.
+        // This condition might be too aggressive if user genuinely wants to see an empty state.
+        // For now, let's assume if fetch returns empty, and initial was empty, we don't re-mock.
+        // The initial mock is for the very first load only.
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message || 'Failed to fetch files data.', variant: "destructive" });
-      setCurrentFiles([]); // On error, assume no files can be shown
+      setCurrentFiles([]); 
     } finally {
       setIsActionLoading(prev => ({ ...prev, pageRefresh: false }));
     }
@@ -84,7 +101,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         throw new Error(result.error || `Failed to delete all files: ${res.statusText}`);
       }
       toast({ title: "All Files Deleted", description: `All files for keyword "${keyword}" have been removed.` });
-      setCurrentFiles([]);
+      setCurrentFiles([]); // Clear files locally. If mock was shown, it will be cleared.
     } catch (e: any) {
       toast({ title: "Deletion Failed", description: e.message || 'Could not delete all files.', variant: "destructive" });
     } finally {
@@ -122,7 +139,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
               <span>Stored Files ({currentFiles.length})</span>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={isActionLoading['deleteAll'] || currentFiles.length === 0}>
+                  <Button variant="destructive" size="sm" disabled={isActionLoading['deleteAll'] || currentFiles.length === 0 || (currentFiles.length === 1 && currentFiles[0].fileName === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0)) }>
                     {isActionLoading['deleteAll'] ? <Loader2 className="animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                     Delete All Files
                   </Button>
@@ -145,6 +162,9 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
             </CardTitle>
             <CardDescription>
               Below are the files currently associated with the keyword "{keyword}".
+              {(initialFilesData === null || initialFilesData.length === 0) && currentFiles.length === 1 && currentFiles[0].fileName === 'sample-demonstration-file.pdf' && (
+                <span className="block text-xs text-amber-600 mt-1"> (This is a sample file for demonstration purposes as no real files were found for this keyword.)</span>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -180,7 +200,9 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                         <AlertDialogHeader>
                             <AlertDialogTitle>Delete "{file.fileName}"?</AlertDialogTitle>
                             <AlertDialogDescription>
-                            This action will permanently delete the file "{file.fileName}" for keyword "{keyword}". This cannot be undone.
+                            This action will permanently delete the file "{file.fileName}" for keyword "{keyword}".
+                            {file.fileName === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0) && " This is a sample file; deleting it here will remove it from the view. Real files require backend deletion."}
+                            This cannot be undone for real files.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -221,7 +243,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                 <UploadCloud className="mr-3 h-7 w-7" /> Add File(s) to "{keyword}"
             </CardTitle>
             <CardDescription>
-                Upload new files to associate with this keyword. Ensure file names are unique for this keyword if replacing.
+                Upload new files to associate with this keyword. Ensure file names are unique for this keyword.
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -243,3 +265,4 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     </div>
   );
 }
+
