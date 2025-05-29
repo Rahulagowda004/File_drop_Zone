@@ -3,15 +3,11 @@
 
 import { useState, useEffect } from 'react';
 import type { StoredFile } from '@/lib/fileStore';
-// UploadForm import is removed as it's no longer used directly in this component's render output after removing the card.
-// However, it might still be needed if there's a different flow to trigger uploads,
-// but based on the request, the card containing it is gone.
-// For now, I will comment it out. If another upload mechanism is intended, this might need to be uncommented.
-// import UploadForm from '@/components/UploadForm';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import UploadForm from '@/components/UploadForm'; // Ensured this import is active
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { DownloadCloud, FileText, Home, Trash2, Loader2, Files } from 'lucide-react';
+import { DownloadCloud, FileText, Home, Trash2, Loader2, Files } from 'lucide-react'; // Removed CalendarClock, Package, UploadCloud, ShieldAlert, AlertTriangle if they were only for removed sections
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 
@@ -204,6 +200,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                 </AlertDialog>
               </div>
             </div>
+            {/* CardDescription was removed from here in a previous step */}
           </CardHeader>
           <CardContent className="space-y-4">
             {currentFiles.map((file) => (
@@ -213,6 +210,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                     <h3 className="text-lg font-semibold text-primary break-all flex items-center">
                       <FileText className="h-5 w-5 mr-2 shrink-0" /> {file.fileName}
                     </h3>
+                    {/* File size and timestamp were removed from here in a previous step */}
                   </div>
                   <div className="flex gap-2 flex-shrink-0 sm:flex-col md:flex-row items-stretch">
                     <Button 
@@ -260,6 +258,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                     </AlertDialog>
                   </div>
                 </div>
+                {/* Conceptual download URL and shield alert text were removed here in previous steps */}
               </Card>
             ))}
           </CardContent>
@@ -272,15 +271,33 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
             <CardContent>
                 <p className="text-center text-muted-foreground">
                     There are currently no files associated with this keyword.
-                    To add files, please visit the <Link href="/upload" className="text-accent hover:underline">Upload Page</Link>.
+                    You can add files using the form below.
                 </p>
             </CardContent>
          </Card>
       )}
 
-      {/* The Card containing UploadForm has been removed as per request.
-          If no files are present, a message guides the user to the /upload page.
-      */}
+      {/* Restored UploadForm Card */}
+      <Card className="w-full shadow-xl border-primary/20 mt-8">
+        <CardHeader>
+          <CardTitle className="text-2xl text-primary">Add File(s) to "{keyword}"</CardTitle>
+          <CardDescription>
+            Upload new files to associate with this keyword. Ensure file names are unique for this keyword.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UploadForm
+            fixedKeyword={keyword}
+            onUploadSuccess={async (uploadedKeyword, summary) => {
+              toast({
+                title: "Upload Processed",
+                description: `${summary} for keyword "${uploadedKeyword}". Refreshing list...`,
+              });
+              await handleFetchFilesData(); // Refresh the list
+            }}
+          />
+        </CardContent>
+      </Card>
 
       <Button variant="outline" asChild className="w-full mt-8">
         <Link href="/">
