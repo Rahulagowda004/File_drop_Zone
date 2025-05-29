@@ -100,6 +100,14 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   const handleDeleteAllFiles = async () => {
     setIsActionLoading(prev => ({ ...prev, deleteAll: true }));
     try {
+      // If only the mock file is displayed and no real files were initially loaded,
+      // simulate deletion by clearing the mock file.
+      if (isMockFileDisplayed && (initialFilesData === null || initialFilesData.length === 0)) {
+        setCurrentFiles([]);
+        toast({ title: "Sample Cleared", description: "Sample demonstration file(s) removed from view." });
+        return;
+      }
+
       const res = await fetch(`/api/file/${keyword}`, { method: 'DELETE' });
       const result = await res.json();
       if (!res.ok) {
@@ -177,7 +185,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                     <Button 
                       variant="destructive" 
                       size="sm" 
-                      disabled={isActionLoading['deleteAll'] || currentFiles.length === 0 || isMockFileDisplayed }
+                      disabled={isActionLoading['deleteAll'] || currentFiles.length === 0 || (isMockFileDisplayed && (initialFilesData === null || initialFilesData.length === 0))}
                     >
                       {isActionLoading['deleteAll'] ? <Loader2 className="animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                       Delete All
@@ -187,7 +195,8 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                     <AlertDialogHeader>
                       <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action will permanently delete all {currentFiles.length} file(s) for keyword "{keyword}". This cannot be undone.
+                        This action will permanently delete all {currentFiles.length} file(s) for keyword "{keyword}". 
+                        {(isMockFileDisplayed && (initialFilesData === null || initialFilesData.length === 0)) ? " This will clear the sample file from view." : "This cannot be undone."}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -200,9 +209,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                 </AlertDialog>
               </div>
             </div>
-            <CardDescription className="mt-2">
-              Below are the files currently associated with the keyword "{keyword}".
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {currentFiles.map((file) => (
