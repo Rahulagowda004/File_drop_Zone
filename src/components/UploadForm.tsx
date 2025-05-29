@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,9 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { UploadCloud, Link2, Loader2, AlertTriangle, FileText } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-
+import { UploadCloud, Link2, Loader2, AlertTriangle, FileText, Paperclip } from 'lucide-react';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -46,7 +44,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
   const [origin, setOrigin] = useState('');
   const { toast } = useToast();
   
-  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, reset, setValue, watch, trigger } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       keyword: fixedKeyword || '',
@@ -57,14 +55,18 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
   const selectedFileList = watch('file');
   const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
 
-  useEffect(() => {
-    if (selectedFileList && selectedFileList.length > 0) {
-      setSelectedFileNames(Array.from(selectedFileList).map(f => f.name));
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      setValue('file', files, { shouldValidate: true });
+      setSelectedFileNames(Array.from(files).map(f => f.name));
     } else {
+      setValue('file', new DataTransfer().files, { shouldValidate: true }); // Use an empty FileList
       setSelectedFileNames([]);
     }
-  }, [selectedFileList]);
-
+    trigger('file'); // Manually trigger validation for the file input
+  };
+  
   useEffect(() => {
     if (typeof window !== "undefined") {
       setOrigin(window.location.origin);
@@ -117,48 +119,29 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     }
     
     setIsLoading(false);
-    reset({ keyword: fixedKeyword || '', file: undefined }); 
-    setSelectedFileNames([]); // Clear selected file names display
+    reset({ keyword: fixedKeyword || '', file: new DataTransfer().files }); 
+    setSelectedFileNames([]);
 
     if (onUploadSuccess) {
       if (successfulUploads.length > 0) {
-        // Call the callback with a summary of uploaded files.
         onUploadSuccess(keywordToSubmit, `${successfulUploads.length} file(s) including "${successfulUploads[0]}"`);
-      }
-      // Toasts for fixedKeyword scenario are handled by KeywordPageClientContent based on the callback
-      // So, only show detailed toasts if NOT on a fixedKeyword page (i.e., on standalone /upload page)
-      if (!fixedKeyword) {
-        if (failedUploads.length > 0 && successfulUploads.length > 0) {
-           toast({
+      } else if (filesToUpload.length > 0 && failedUploads.length === filesToUpload.length) {
+        toast({
+            title: "All Uploads Failed",
+            description: `Could not upload any of the selected files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
+            variant: "destructive",
+        });
+      } else if (failedUploads.length > 0) {
+         toast({
               title: "Partial Upload Success",
               description: `${successfulUploads.length} file(s) uploaded. ${failedUploads.length} file(s) failed. First failure: ${failedUploads[0].name} - ${failedUploads[0].error}`,
               variant: "default", 
           });
-        } else if (failedUploads.length > 0) {
-          toast({
-              title: "Some Uploads Failed",
-              description: `${failedUploads.length} file(s) could not be uploaded. First failure: ${failedUploads[0].name} - ${failedUploads[0].error}`,
-              variant: "destructive",
-          });
-        } else if (successfulUploads.length > 0) {
-           toast({
-              title: "Upload Complete!",
-              description: `${successfulUploads.length} file(s) successfully added to keyword '${keywordToSubmit}'.`,
-          });
-        } else if (filesToUpload.length > 0) { 
-           toast({
-              title: "Upload Failed",
-              description: `All ${filesToUpload.length} file(s) could not be uploaded. First error: ${failedUploads[0]?.error || 'Unknown error'}.`,
-              variant: "destructive",
-          });
-        }
       }
     } else {
-      // Standalone /upload page behavior
       setUploadSummary({ success: successfulUploads, failed: failedUploads });
       if (successfulUploads.length > 0) {
         setUploadedFileLink(`/${keywordToSubmit}`);
-        // Toast for standalone page
          toast({
           title: successfulUploads.length === filesToUpload.length ? "All Uploads Successful!" : "Uploads Processed",
           description: `${successfulUploads.length} file(s) uploaded to keyword '${keywordToSubmit}'. ${failedUploads.length > 0 ? `${failedUploads.length} file(s) failed.` : ''}`,
@@ -192,28 +175,45 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="file-uploadform" className="font-semibold">Files</Label>
-          <Input 
-            id="file-uploadform" 
-            type="file"
-            multiple
-            {...register('file')} 
-            className={`block w-full text-sm text-foreground
-                        file:mr-4 file:py-2 file:px-4
-                        file:rounded-md file:border file:border-input
-                        file:bg-muted file:text-sm file:font-semibold
-                        file:text-foreground hover:file:bg-accent/80
-                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-                        disabled:cursor-not-allowed disabled:opacity-50
-                        ${errors.file ? 'border-destructive ring-destructive' : ''}`}
-            aria-invalid={errors.file ? "true" : "false"}
-          />
+          <Label htmlFor="file-uploadform-trigger" className="font-semibold">Files</Label>
+          <Label 
+            htmlFor="file-uploadform-trigger" 
+            className={`
+              flex flex-col items-center justify-center w-full h-32 px-4 
+              border-2 border-dashed rounded-lg cursor-pointer 
+              bg-muted/50 hover:bg-muted/75 transition-colors
+              ${errors.file ? 'border-destructive hover:border-destructive/75' : 'border-input hover:border-primary/50'}
+            `}
+          >
+            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+              <UploadCloud className={`w-8 h-8 mb-3 ${errors.file ? 'text-destructive' : 'text-muted-foreground'}`} />
+              <p className={`mb-2 text-sm ${errors.file ? 'text-destructive' : 'text-muted-foreground'}`}>
+                <span className="font-semibold">Click to upload</span> or drag and drop
+              </p>
+              <p className="text-xs text-muted-foreground/80">Max 10MB per file</p>
+            </div>
+            <Input 
+              id="file-uploadform-trigger" 
+              type="file"
+              multiple
+              className="sr-only" // Visually hide the input
+              {...register('file')} // Use react-hook-form registration
+              onChange={handleFileChange} // Handle file changes
+              aria-invalid={errors.file ? "true" : "false"}
+            />
+          </Label>
           {errors.file && <p className="text-sm text-destructive">{errors.file.message}</p>}
+          
           {selectedFileNames.length > 0 && (
-            <div className="mt-2 p-3 bg-muted/50 border border-border rounded-md text-sm text-muted-foreground">
-              <p className="font-medium mb-1">Selected files:</p>
-              <ul className="list-disc list-inside space-y-0.5 max-h-28 overflow-y-auto">
-                {selectedFileNames.map(name => <li key={name} className="truncate">{name}</li>)}
+            <div className="mt-3 p-3 bg-muted/50 border border-border rounded-md text-sm text-muted-foreground">
+              <p className="font-medium mb-1 text-foreground">Selected files ({selectedFileNames.length}):</p>
+              <ul className="list-disc list-inside space-y-0.5 max-h-32 overflow-y-auto">
+                {selectedFileNames.map((name, index) => (
+                  <li key={index} className="truncate flex items-center">
+                    <Paperclip className="h-4 w-4 mr-2 shrink-0 text-primary" /> 
+                    {name}
+                  </li>
+                ))}
               </ul>
             </div>
           )}
