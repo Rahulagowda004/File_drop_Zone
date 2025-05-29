@@ -70,22 +70,9 @@ export default function KeywordPageClientContent({
       setBaseUrl(window.location.origin);
     }
   }, []);
-
-  const isMockFileDisplayed =
-    currentFiles.length === 1 &&
-    currentFiles[0].fileName === "sample-demonstration-file.pdf" &&
-    (!initialFilesData || initialFilesData.length === 0);
-
   useEffect(() => {
-    if (initialFilesData === null || initialFilesData.length === 0) {
-      const mockDemoFile: StoredFile = {
-        keyword: keyword,
-        fileName: "sample-demonstration-file.pdf",
-        contentType: "application/pdf",
-        size: 780 * 1024,
-        uploadedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      };
-      setCurrentFiles([mockDemoFile]);
+    if (initialFilesData === null) {
+      setCurrentFiles([]);
     } else {
       setCurrentFiles(
         initialFilesData.map((file) => ({
@@ -139,18 +126,6 @@ export default function KeywordPageClientContent({
   const handleDeleteSingleFile = async (fileNameToDelete: string) => {
     setIsActionLoading((prev) => ({ ...prev, [fileNameToDelete]: true }));
     try {
-      if (
-        fileNameToDelete === "sample-demonstration-file.pdf" &&
-        isMockFileDisplayed
-      ) {
-        setCurrentFiles([]);
-        toast({
-          title: "Sample Cleared",
-          description: "Sample demonstration file removed from view.",
-        });
-        return;
-      }
-
       console.log(`Deleting file: ${keyword}/${fileNameToDelete}`);
       const deleteUrl = `/api/file/${keyword}/delete?fileName=${encodeURIComponent(
         fileNameToDelete
@@ -188,22 +163,9 @@ export default function KeywordPageClientContent({
       setIsActionLoading((prev) => ({ ...prev, [fileNameToDelete]: false }));
     }
   };
-
   const handleDeleteAllFiles = async () => {
     setIsActionLoading((prev) => ({ ...prev, deleteAll: true }));
     try {
-      if (
-        isMockFileDisplayed &&
-        (!initialFilesData || initialFilesData.length === 0)
-      ) {
-        setCurrentFiles([]);
-        toast({
-          title: "Sample Cleared",
-          description: "Sample demonstration file(s) removed from view.",
-        });
-        return;
-      }
-
       const res = await fetch(`/api/file/${keyword}`, { method: "DELETE" });
       const result = await res.json();
       if (!res.ok) {
@@ -226,20 +188,7 @@ export default function KeywordPageClientContent({
       setIsActionLoading((prev) => ({ ...prev, deleteAll: false }));
     }
   };
-
   const handleDownloadAllFiles = () => {
-    if (
-      isMockFileDisplayed &&
-      (!initialFilesData || initialFilesData.length === 0)
-    ) {
-      toast({
-        title: "Sample Files",
-        description:
-          "This is a sample demonstration. For actual files, a ZIP download would be initiated.",
-        variant: "default",
-      });
-      return;
-    }
     if (currentFiles.length === 0) {
       toast({
         title: "No Files",
@@ -260,9 +209,6 @@ export default function KeywordPageClientContent({
     }, 1500);
   };
   const getDownloadUrl = (fileName: string) => {
-    if (fileName === "sample-demonstration-file.pdf" && isMockFileDisplayed) {
-      return "#";
-    }
     return `/api/download/${keyword}/${encodeURIComponent(fileName)}`;
   };
 
@@ -279,10 +225,7 @@ export default function KeywordPageClientContent({
               size="sm"
               onClick={handleDownloadAllFiles}
               disabled={
-                isActionLoading["downloadAll"] ||
-                currentFiles.length === 0 ||
-                (isMockFileDisplayed &&
-                  (!initialFilesData || initialFilesData.length === 0))
+                isActionLoading["downloadAll"] || currentFiles.length === 0
               }
               className="flex-1 sm:flex-none border-primary text-primary hover:bg-primary/10"
             >
@@ -299,10 +242,7 @@ export default function KeywordPageClientContent({
                   variant="outline"
                   size="sm"
                   disabled={
-                    isActionLoading["deleteAll"] ||
-                    currentFiles.length === 0 ||
-                    (isMockFileDisplayed &&
-                      (!initialFilesData || initialFilesData.length === 0))
+                    isActionLoading["deleteAll"] || currentFiles.length === 0
                   }
                   className="flex-1 sm:flex-none border-destructive text-destructive hover:bg-destructive/10"
                 >
@@ -316,15 +256,11 @@ export default function KeywordPageClientContent({
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>{" "}
                   <AlertDialogDescription>
                     This action will permanently delete all{" "}
-                    {currentFiles.length} file(s) for keyword "{keyword}".
-                    {isMockFileDisplayed &&
-                    currentFiles[0]?.fileName ===
-                      "sample-demonstration-file.pdf"
-                      ? " This will clear the sample file from view."
-                      : " This cannot be undone."}
+                    {currentFiles.length} file(s) for keyword "{keyword}". This
+                    cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -414,30 +350,18 @@ export default function KeywordPageClientContent({
                               size="sm"
                               className="flex-1 sm:flex-none"
                               onClick={() => {
-                                if (
-                                  file.fileName ===
-                                    "sample-demonstration-file.pdf" &&
-                                  isMockFileDisplayed
-                                ) {
-                                  toast({
-                                    title: "Sample File",
-                                    description:
-                                      "This is a sample file. Actual download occurs for real files.",
-                                  });
-                                } else {
-                                  console.log(
-                                    `Downloading file: ${file.fileName}`
-                                  );
-                                  const downloadUrl = getDownloadUrl(
-                                    file.fileName
-                                  );
-                                  console.log(`Download URL: ${downloadUrl}`);
-                                  window.open(downloadUrl, "_blank");
-                                  toast({
-                                    title: "Download Started",
-                                    description: `Downloading "${file.fileName}"`,
-                                  });
-                                }
+                                console.log(
+                                  `Downloading file: ${file.fileName}`
+                                );
+                                const downloadUrl = getDownloadUrl(
+                                  file.fileName
+                                );
+                                console.log(`Download URL: ${downloadUrl}`);
+                                window.open(downloadUrl, "_blank");
+                                toast({
+                                  title: "Download Started",
+                                  description: `Downloading "${file.fileName}"`,
+                                });
                               }}
                             >
                               <div className="flex items-center">
@@ -481,15 +405,11 @@ export default function KeywordPageClientContent({
                             <AlertDialogHeader>
                               <AlertDialogTitle>
                                 Delete "{file.fileName}"?
-                              </AlertDialogTitle>
+                              </AlertDialogTitle>{" "}
                               <AlertDialogDescription>
                                 This action will permanently delete the file "
-                                {file.fileName}" for keyword "{keyword}".
-                                {file.fileName ===
-                                  "sample-demonstration-file.pdf" &&
-                                  isMockFileDisplayed &&
-                                  " This is a sample file; deleting it here will remove it from the view. Real files require backend deletion."}
-                                This cannot be undone for real files.
+                                {file.fileName}" for keyword "{keyword}". This
+                                cannot be undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
