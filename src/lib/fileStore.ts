@@ -9,7 +9,7 @@ import {
 import { ObjectId } from "mongodb";
 
 export interface StoredFile {
-  _id?: ObjectId;
+  _id?: ObjectId | string;
   keyword: string;
   fileName: string;
   contentType: string;
@@ -96,7 +96,20 @@ export async function getFilesByKeyword(
     .sort({ uploadedAt: -1 })
     .toArray();
 
-  return files as StoredFile[];
+  // Convert MongoDB objects to plain objects for client components
+  // This ensures MongoDB-specific objects like ObjectId are properly serialized
+  return files.map((file) => {
+    // Create a plain JS object with string ID
+    const plainFile = {
+      ...file,
+      _id: file._id ? file._id.toString() : undefined,
+      // Ensure dates are serialized properly
+      uploadedAt: new Date(file.uploadedAt),
+      expiresAt: new Date(file.expiresAt),
+    };
+
+    return plainFile;
+  }) as StoredFile[];
 }
 
 // Delete a file by keyword and filename
