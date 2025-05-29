@@ -1,6 +1,6 @@
 // src/app/api/file/[keyword]/delete/route.ts
 import { type NextRequest, NextResponse } from "next/server";
-import { uploadedFiles } from "@/lib/fileStore";
+import { deleteFile, getFilesByKeyword } from "@/lib/fileStore";
 
 export async function DELETE(
   request: NextRequest,
@@ -24,42 +24,29 @@ export async function DELETE(
     );
   }
 
-  const filesForKeyword = uploadedFiles.get(keyword);
+  try {
+    const isDeleted = await deleteFile(keyword, fileName);
 
-  if (!filesForKeyword) {
-    return NextResponse.json({ error: "Keyword not found." }, { status: 404 });
-  }
+    if (!isDeleted) {
+      return NextResponse.json(
+        { error: `File '${fileName}' not found under keyword '${keyword}'.` },
+        { status: 404 }
+      );
+    }
 
-  const initialLength = filesForKeyword.length;
-  const updatedFiles = filesForKeyword.filter(
-    (file) => file.fileName !== fileName
-  );
+    // Get remaining files count
+    const remainingFiles = await getFilesByKeyword(keyword);
+    const remainingCount = remainingFiles ? remainingFiles.length : 0;
+    
+    if (remainingCount === 0) {
+      console.log(`Last file removed from keyword '${keyword}'`);
+    }
 
-  if (updatedFiles.length === initialLength) {
     return NextResponse.json(
-      { error: `File '${fileName}' not found under keyword '${keyword}'.` },
-      { status: 404 }
+      {
+        message: `File '${fileName}' deleted successfully from keyword '${keyword}'.`,
+        remainingFiles: remainingCount,
+      },
+      { status: 200 }
     );
-  }
-
-  if (updatedFiles.length === 0) {
-    // If last file is deleted, remove the keyword entry entirely
-    // uploadedFiles.delete(keyword);
-    // console.log(`File '${fileName}' deleted. Keyword '${keyword}' is now empty and removed.`);
-    // OR keep the keyword with an empty array:
-    uploadedFiles.set(keyword, updatedFiles);
-    console.log(
-      `File '${fileName}' deleted from keyword '${keyword}'. Keyword now has no files.`
-    );
-  } else {
-    uploadedFiles.set(keyword, updatedFiles);
-    console.log(`File '${fileName}' deleted from keyword '${keyword}'.`);
-  }
-
-  return NextResponse.json(
-    {
-      message: `File '${fileName}' deleted successfully from keyword '${keyword}'.`,
-    },
-    { status: 200 }
-  );
 }

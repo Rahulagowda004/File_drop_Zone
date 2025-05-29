@@ -1,6 +1,7 @@
 import type { StoredFile } from "@/lib/fileStore";
 import type { Metadata } from "next";
 import KeywordPageClientContent from "@/components/KeywordPageClientContent";
+import { getFilesByKeyword } from "@/lib/fileStore";
 
 // Helper function to get base URL for server-side fetch
 function getBaseUrl() {
@@ -13,29 +14,25 @@ function getBaseUrl() {
   return "http://localhost:9002"; // Ensure this matches your dev port
 }
 
+// This function now directly uses our MongoDB database to get files
 async function getFilesData(keyword: string): Promise<StoredFile[] | null> {
-  const baseUrl = getBaseUrl();
   try {
-    const res = await fetch(`${baseUrl}/api/file/${keyword}`, {
-      cache: "no-store",
-    });
-    if (res.status === 404) {
-      console.log(`No files found for keyword: ${keyword} (API returned 404)`);
-      return null; // Indicate keyword not found or no files explicitly
+    if (!keyword || keyword.trim() === "") {
+      return null;
     }
-    if (!res.ok) {
-      console.error(
-        `Error fetching files data for ${keyword}: ${res.status} ${res.statusText}`
-      );
-      return null; // Or handle error differently
+
+    const keywordLower = keyword.trim().toLowerCase();
+    const filesData = await getFilesByKeyword(keywordLower);
+
+    // If no files found, return null to indicate keyword not found or empty
+    if (!filesData || filesData.length === 0) {
+      console.log(`No files found for keyword: ${keywordLower}`);
+      return null;
     }
-    const data = await res.json();
-    return Array.isArray(data) ? data : null; // Ensure it's an array
+
+    return filesData;
   } catch (error) {
-    console.error(
-      `Network or other error fetching files data for ${keyword}:`,
-      error
-    );
+    console.error(`Error fetching files data for ${keyword}:`, error);
     return null;
   }
 }
