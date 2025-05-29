@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -10,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
-import { UploadCloud, Link2, Loader2 } from 'lucide-react';
+import { UploadCloud, Link2, Loader2, AlertTriangle } from 'lucide-react';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -19,25 +20,29 @@ const formSchema = z.object({
     .min(3, "Keyword must be at least 3 characters.")
     .max(50, "Keyword must be at most 50 characters.")
     .regex(/^[a-zA-Z0-9_-]+$/, "Keyword can only contain letters, numbers, underscores, and hyphens."),
-  file: z.custom<FileList>()
-    .refine((files) => files && files.length === 1, "File is required.")
-    .refine((files) => files?.[0]?.size <= MAX_FILE_SIZE, `Max file size is ${MAX_FILE_SIZE / (1024*1024)}MB.`)
+  file: z.instanceof(FileList)
+    .refine((files) => files && files.length > 0, "At least one file is required.")
+    .refine(
+      (files) => Array.from(files).every(file => file.size <= MAX_FILE_SIZE),
+      `Max file size for each file is ${MAX_FILE_SIZE / (1024 * 1024)}MB.`
+    ),
 });
 
 type FormData = z.infer<typeof formSchema>;
 
 interface UploadFormProps {
   fixedKeyword?: string;
-  onUploadSuccess?: (uploadedKeyword: string, uploadedFileName: string) => void;
+  onUploadSuccess?: (uploadedKeyword: string, uploadedFileNamesSummary: string) => void;
 }
 
 export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedFileLink, setUploadedFileLink] = useState<string | null>(null);
+  const [uploadSummary, setUploadSummary] = useState<{success: string[], failed: {name: string, error: string}[] } | null>(null);
   const [origin, setOrigin] = useState('');
   const { toast } = useToast();
   
-  const { register, handleSubmit, formState: { errors }, reset, setValue, watch, setError } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       keyword: fixedKeyword || '',
@@ -45,7 +50,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     }
   });
 
-  const selectedFile = watch('file');
+  const selectedFiles = watch('file');
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -62,103 +67,155 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
   const onSubmit: SubmitHandler<FormData> = async (data) => {
     setIsLoading(true);
     setUploadedFileLink(null);
+    setUploadSummary(null);
 
-    const formDataPayload = new FormData();
+    const filesToUpload = Array.from(data.file);
     const keywordToSubmit = fixedKeyword || data.keyword;
-    formDataPayload.append('keyword', keywordToSubmit);
-    formDataPayload.append('file', data.file[0]);
+    
+    let successfulUploads: string[] = [];
+    let failedUploads: {name: string, error: string}[] = [];
 
-    try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formDataPayload,
-      });
+    for (const fileItem of filesToUpload) {
+      const formDataPayload = new FormData();
+      formDataPayload.append('keyword', keywordToSubmit);
+      formDataPayload.append('file', fileItem);
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        // Handle specific error for duplicate file name for the same keyword
-        if (response.status === 409 && result.error && result.error.includes("already exists for this keyword")) {
-           setError("file", { type: "manual", message: result.error });
-        }
-        throw new Error(result.error || 'File upload failed. Please try again.');
-      }
-      
-      if (onUploadSuccess) {
-        onUploadSuccess(keywordToSubmit, data.file[0].name);
-      } else {
-        // This block is less likely to be used now with multi-file, but kept for standalone use
-        setUploadedFileLink(`/${keywordToSubmit}`); 
-        toast({
-            title: "Upload Successful!",
-            description: `File '${data.file[0].name}' is now available with keyword '${keywordToSubmit}'.`,
+      try {
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formDataPayload,
         });
+        const result = await response.json();
+
+        if (!response.ok) {
+          failedUploads.push({ name: fileItem.name, error: result.error || `Upload failed for ${fileItem.name}.` });
+        } else {
+          successfulUploads.push(fileItem.name);
+        }
+      } catch (error: any) {
+        failedUploads.push({ name: fileItem.name, error: error.message || `An unexpected error occurred for ${fileItem.name}.` });
       }
-      reset({ keyword: fixedKeyword || '', file: undefined }); // Reset form, keeping fixedKeyword if present
-    } catch (error: any) {
-      if (!(error.message && error.message.includes("already exists for this keyword"))) {
+    }
+    
+    setIsLoading(false);
+    reset({ keyword: fixedKeyword || '', file: undefined });
+
+    if (onUploadSuccess) {
+      if (successfulUploads.length > 0) {
+        onUploadSuccess(keywordToSubmit, `${successfulUploads.length} file(s) including "${successfulUploads[0]}"`);
+      }
+      // Optionally, notify about failures too, though the parent mainly refreshes on success
+      if (failedUploads.length > 0) {
         toast({
+            title: "Some Uploads Failed",
+            description: `${failedUploads.length} file(s) could not be uploaded. First failure: ${failedUploads[0].name} - ${failedUploads[0].error}`,
+            variant: "destructive",
+        });
+      } else if (successfulUploads.length > 0) {
+         toast({
+            title: "Upload Complete!",
+            description: `${successfulUploads.length} file(s) successfully added to keyword '${keywordToSubmit}'.`,
+        });
+      } else {
+        // All failed, no onUploadSuccess was called.
+         toast({
             title: "Upload Failed",
-            description: error.message || "An unexpected error occurred. Please check your input and try again.",
+            description: `All ${filesToUpload.length} file(s) could not be uploaded. Please try again.`,
             variant: "destructive",
         });
       }
-    } finally {
-      setIsLoading(false);
+    } else {
+      // Standalone /upload page behavior
+      setUploadSummary({ success: successfulUploads, failed: failedUploads });
+      if (successfulUploads.length > 0) {
+        setUploadedFileLink(`/${keywordToSubmit}`);
+        toast({
+          title: "Uploads Processed",
+          description: `${successfulUploads.length} file(s) uploaded. ${failedUploads.length} file(s) failed.`,
+          variant: failedUploads.length > 0 ? "default" : "default", // 'default' or 'destructive' if all failed
+        });
+      } else {
+         toast({
+          title: "All Uploads Failed",
+          description: `Could not upload any of the selected files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
+          variant: "destructive",
+        });
+      }
     }
   };
 
   return (
-    // Removed outer Card as KeywordPageClientContent now wraps forms in cards
     <form onSubmit={handleSubmit(onSubmit)}>
-      <div className="space-y-6"> {/* Replaced CardContent */}
-        <div className="space-y-2">
-          <Label htmlFor="keyword-uploadform" className="font-semibold">Unique Keyword</Label>
-          <Input 
-            id="keyword-uploadform" 
-            {...register('keyword')} 
-            placeholder="e.g., project-alpha-files" 
-            readOnly={!!fixedKeyword}
-            className={`${errors.keyword ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'} ${fixedKeyword ? 'bg-muted/50 cursor-not-allowed' : ''}`}
-            aria-invalid={errors.keyword ? "true" : "false"}
-          />
-          {errors.keyword && <p className="text-sm text-destructive">{errors.keyword.message}</p>}
-        </div>
+      <div className="space-y-6">
+        {!fixedKeyword && (
+          <div className="space-y-2">
+            <Label htmlFor="keyword-uploadform" className="font-semibold">Unique Keyword</Label>
+            <Input 
+              id="keyword-uploadform" 
+              {...register('keyword')} 
+              placeholder="e.g., project-alpha-files"
+              className={`${errors.keyword ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}`}
+              aria-invalid={errors.keyword ? "true" : "false"}
+            />
+            {errors.keyword && <p className="text-sm text-destructive">{errors.keyword.message}</p>}
+          </div>
+        )}
 
         <div className="space-y-2">
-          <Label htmlFor="file-uploadform" className="font-semibold">File</Label>
+          <Label htmlFor="file-uploadform" className="font-semibold">Files</Label>
           <Input 
             id="file-uploadform" 
-            type="file" 
+            type="file"
+            multiple // Allow multiple file selection
             {...register('file')} 
-            className={`pt-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${selectedFile && selectedFile.length > 0 ? 'file:bg-accent file:text-accent-foreground' : 'file:bg-primary/10 file:text-primary hover:file:bg-primary/20'} ${errors.file ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}`}
+            className={`pt-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${selectedFiles && selectedFiles.length > 0 ? 'file:bg-accent file:text-accent-foreground' : 'file:bg-primary/10 file:text-primary hover:file:bg-primary/20'} ${errors.file ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}`}
             aria-invalid={errors.file ? "true" : "false"}
           />
           {errors.file && <p className="text-sm text-destructive">{errors.file.message}</p>}
         </div>
 
-          {uploadedFileLink && origin && !onUploadSuccess && (
-          <div className="p-4 bg-accent/10 border border-accent rounded-md text-accent-foreground flex items-start gap-3">
-            <Link2 className="h-5 w-5 text-accent shrink-0 mt-1" />
-            <div>
-              <p className="font-medium text-accent">File uploaded! Access keyword page:</p>
-              <Link href={uploadedFileLink} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline font-semibold break-all">
-                {`${origin}${uploadedFileLink}`}
-              </Link>
+        {uploadedFileLink && origin && !onUploadSuccess && uploadSummary && (
+          <div className="p-4 bg-accent/10 border border-accent rounded-md text-accent-foreground space-y-3">
+            <div className="flex items-start gap-3">
+              <Link2 className="h-5 w-5 text-accent shrink-0 mt-1" />
+              <div>
+                <p className="font-medium text-accent">
+                  {uploadSummary.success.length > 0 ? 
+                    `${uploadSummary.success.length} file(s) processed for keyword! Access keyword page:` :
+                    "Uploads Processed"}
+                </p>
+                {uploadSummary.success.length > 0 && (
+                  <Link href={uploadedFileLink} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline font-semibold break-all">
+                    {`${origin}${uploadedFileLink}`}
+                  </Link>
+                )}
+              </div>
             </div>
+            {uploadSummary.failed.length > 0 && (
+              <div className="p-3 bg-destructive/10 border border-destructive rounded-md text-destructive">
+                <div className="flex items-center gap-2 font-semibold mb-1">
+                   <AlertTriangle size={16} /> 
+                   <p>{uploadSummary.failed.length} file(s) failed to upload:</p>
+                </div>
+                <ul className="list-disc list-inside text-sm space-y-1 max-h-32 overflow-y-auto">
+                  {uploadSummary.failed.map(f => <li key={f.name}><strong>{f.name}:</strong> {f.error}</li>)}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
-      <div className="mt-6"> {/* Replaced CardFooter */}
+      <div className="mt-6">
         <Button type="submit" disabled={isLoading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 text-base font-semibold">
           {isLoading ? (
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
           ) : (
             <UploadCloud className="mr-2 h-5 w-5" />
           )}
-          {isLoading ? 'Uploading...' : (fixedKeyword ? 'Upload File' : 'Upload & Share')}
+          {isLoading ? 'Uploading...' : (fixedKeyword ? 'Upload File(s)' : 'Upload & Share File(s)')}
         </Button>
       </div>
     </form>
   );
 }
+    
