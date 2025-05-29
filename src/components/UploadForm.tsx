@@ -52,8 +52,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     resolver: zodResolver(formSchema),
     defaultValues: {
       keyword: fixedKeyword || '',
-      // file field will be managed by Controller's defaultValue or initialized as undefined
-      // file: undefined, // Explicitly undefined or let Controller handle it
+      file: undefined, // Initialize file as undefined
     }
   });
 
@@ -73,7 +72,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
   }, [fixedKeyword, setValue]);
 
   useEffect(() => {
-    if (selectedFileList instanceof FileList) {
+    if (selectedFileList instanceof FileList && selectedFileList.length > 0) {
       setSelectedFileNames(Array.from(selectedFileList).map(f => f.name));
     } else {
       setSelectedFileNames([]);
@@ -123,7 +122,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     setIsLoading(false);
     reset({ 
       keyword: fixedKeyword || '', 
-      file: (typeof window !== 'undefined' ? new DataTransfer().files : undefined) as unknown as FileList // Reset file field
+      file: undefined // Reset file field to undefined
     });
 
     if (onUploadSuccess) {
@@ -150,7 +149,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
          toast({
           title: successfulUploads.length === filesToUpload.length ? "All Uploads Successful!" : "Uploads Processed",
           description: `${successfulUploads.length} file(s) uploaded to keyword '${keywordToSubmit}'. ${failedUploads.length > 0 ? `${failedUploads.length} file(s) failed.` : ''}`,
-          variant: failedUploads.length > 0 ? "default" : "default", // "default" is fine, "success" if available
+          variant: failedUploads.length > 0 ? "default" : "default",
         });
       } else if (filesToUpload.length > 0) {
          toast({
@@ -184,7 +183,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
           <Controller
             name="file"
             control={control}
-            defaultValue={ (typeof window !== "undefined" ? new DataTransfer().files : undefined) as FileList | undefined }
+            // No defaultValue here, it's handled by useForm's defaultValues
             render={({ field: { onChange: controllerOnChange, onBlur, name, ref }, fieldState }) => (
               <div>
                 <Label
@@ -216,7 +215,9 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
                       if (files && files.length > 0) {
                         controllerOnChange(files);
                       } else {
-                        controllerOnChange(typeof window !== 'undefined' ? new DataTransfer().files : undefined);
+                        // Pass an empty FileList if no files are selected or selection is cleared.
+                        // This ensures the type passed to Zod for validation is consistent.
+                        controllerOnChange(new DataTransfer().files);
                       }
                     }}
                     aria-invalid={!!fieldState.error}
@@ -287,6 +288,4 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     </form>
   );
 }
-    
-
     
