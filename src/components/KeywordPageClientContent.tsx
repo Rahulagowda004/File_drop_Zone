@@ -3,11 +3,15 @@
 
 import { useState, useEffect } from 'react';
 import type { StoredFile } from '@/lib/fileStore';
-import UploadForm from '@/components/UploadForm';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+// UploadForm import is removed as it's no longer used directly in this component's render output after removing the card.
+// However, it might still be needed if there's a different flow to trigger uploads,
+// but based on the request, the card containing it is gone.
+// For now, I will comment it out. If another upload mechanism is intended, this might need to be uncommented.
+// import UploadForm from '@/components/UploadForm';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { DownloadCloud, AlertTriangle, FileText, CalendarClock, Package, Home, UploadCloud, Trash2, Loader2, Files, ShieldAlert } from 'lucide-react';
+import { DownloadCloud, FileText, Home, Trash2, Loader2, Files } from 'lucide-react';
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 
@@ -137,6 +141,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     if (fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) {
       return '#'; 
     }
+    // This URL is conceptual for actual files.
     return `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`;
   };
 
@@ -149,7 +154,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
             Files for Keyword: <span className="text-accent">{keyword}</span>
           </h1>
           <p className="text-md text-muted-foreground">
-            Manage and upload files associated with this keyword. Files are auto-deleted after 24 hours from the keyword's first upload.
+            Manage files associated with this keyword. Files are auto-deleted after 24 hours from the keyword's first upload.
           </p>
       </div>
 
@@ -267,31 +272,15 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
             <CardContent>
                 <p className="text-center text-muted-foreground">
                     There are currently no files associated with this keyword.
-                    You can upload files using the form below.
+                    To add files, please visit the <Link href="/upload" className="text-accent hover:underline">Upload Page</Link>.
                 </p>
             </CardContent>
          </Card>
       )}
 
-      <Card className="shadow-xl border-accent/20">
-        <CardHeader>
-            <CardTitle className="text-2xl text-accent flex items-center">
-                <UploadCloud className="mr-3 h-7 w-7" /> Add File(s) to "{keyword}"
-            </CardTitle>
-            <CardDescription>
-                Upload new files to associate with this keyword. Ensure file names are unique for this keyword.
-            </CardDescription>
-        </CardHeader>
-        <CardContent>
-            <UploadForm
-              fixedKeyword={keyword}
-              onUploadSuccess={async (uploadedKeyword, uploadedFileNamesSummary) => {
-                  toast({ title: "Upload Processed", description: `${uploadedFileNamesSummary} for keyword '${uploadedKeyword}'. Refreshing list...` });
-                  await handleFetchFilesData(); 
-              }}
-            />
-        </CardContent>
-      </Card>
+      {/* The Card containing UploadForm has been removed as per request.
+          If no files are present, a message guides the user to the /upload page.
+      */}
 
       <Button variant="outline" asChild className="w-full mt-8">
         <Link href="/">
@@ -301,5 +290,3 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     </div>
   );
 }
-
-    
