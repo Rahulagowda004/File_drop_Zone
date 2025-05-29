@@ -9,10 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import Link from 'next/link';
 import { UploadCloud, Link2, Loader2, AlertTriangle, Paperclip, XCircle } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -31,7 +28,7 @@ const formSchema = z.object({
     .refine((files) => files && files.length > 0, "At least one file is required.")
     .refine(
       (files) => files && Array.from(files).every(file => file.size <= MAX_FILE_SIZE),
-      `Max file size for each file is ${MAX_FILE_SIZE / (1024 * 1024)}MB.`
+      \`Max file size for each file is \${MAX_FILE_SIZE / (1024 * 1024)}MB.\`
     ),
 });
 
@@ -48,6 +45,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
   const [uploadSummary, setUploadSummary] = useState<{success: string[], failed: {name: string, error: string}[] } | null>(null);
   const [origin, setOrigin] = useState('');
   const { toast } = useToast();
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const { handleSubmit, formState: { errors }, reset, watch, control, setValue } = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -87,8 +85,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     const dataTransfer = new DataTransfer();
     newSelectedFilesArray.forEach(file => dataTransfer.items.add(file));
     const newFileList = dataTransfer.files;
-    setValue('file', newFileList, { shouldValidate: true }); 
-    // useEffect will sync selectedFiles state for UI
+    setValue('file', newFileList.length > 0 ? newFileList : undefined, { shouldValidate: true }); 
   };
 
 
@@ -122,12 +119,12 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
         const result = await response.json();
 
         if (!response.ok) {
-          failedUploads.push({ name: fileItem.name, error: result.error || `Upload failed for ${fileItem.name}. Status: ${response.status}` });
+          failedUploads.push({ name: fileItem.name, error: result.error || \`Upload failed for \${fileItem.name}. Status: \${response.status}\` });
         } else {
           successfulUploads.push(fileItem.name);
         }
       } catch (error: any) {
-        failedUploads.push({ name: fileItem.name, error: error.message || `An unexpected error occurred for ${fileItem.name}.` });
+        failedUploads.push({ name: fileItem.name, error: error.message || \`An unexpected error occurred for \${fileItem.name}.\` });
       }
     }
 
@@ -136,43 +133,83 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
       keyword: fixedKeyword || '', 
       file: undefined 
     });
-    // UI selectedFiles will be cleared by useEffect watching formFileField after reset
+    setSelectedFiles([]); // Explicitly clear UI preview
 
     if (onUploadSuccess) {
       if (successfulUploads.length > 0) {
-        onUploadSuccess(keywordToSubmit, `${successfulUploads.length} file(s) including "${successfulUploads[0]}" processed.`);
+        onUploadSuccess(keywordToSubmit, \`\${successfulUploads.length} file(s) including "\${successfulUploads[0]}" processed.\`);
       } 
       if (failedUploads.length > 0 && successfulUploads.length === 0) { 
          toast({
             title: "All Uploads Failed",
-            description: `Could not upload any files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
+            description: \`Could not upload any files. First failure: \${failedUploads[0]?.name} - \${failedUploads[0]?.error || 'Unknown error'}\`,
             variant: "destructive",
         });
       } else if (failedUploads.length > 0) { 
          toast({
               title: "Partial Upload Failure",
-              description: `${successfulUploads.length} file(s) uploaded. ${failedUploads.length} file(s) failed. First failure: ${failedUploads[0].name} - ${failedUploads[0].error}`,
+              description: \`\${successfulUploads.length} file(s) uploaded. \${failedUploads.length} file(s) failed. First failure: \${failedUploads[0].name} - \${failedUploads[0].error}\`,
               variant: "default", 
           });
       }
     } else { 
       setUploadSummary({ success: successfulUploads, failed: failedUploads });
       if (successfulUploads.length > 0) {
-        setUploadedFileLink(`/${keywordToSubmit}`);
+        setUploadedFileLink(\`/\${keywordToSubmit}\`);
          toast({
           title: successfulUploads.length === filesToUpload.length ? "All Uploads Successful!" : "Uploads Processed",
-          description: `${successfulUploads.length} file(s) uploaded to keyword '${keywordToSubmit}'. ${failedUploads.length > 0 ? `${failedUploads.length} file(s) failed.` : ''}`,
+          description: \`\${successfulUploads.length} file(s) uploaded to keyword '\${keywordToSubmit}'. \${failedUploads.length > 0 ? \`\${failedUploads.length} file(s) failed.\` : ''}\`,
           variant: failedUploads.length > 0 ? "default" : "default",
         });
       } else if (filesToUpload.length > 0) {
          toast({
           title: "All Uploads Failed",
-          description: `Could not upload any files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
+          description: \`Could not upload any files. First failure: \${failedUploads[0]?.name} - \${failedUploads[0]?.error || 'Unknown error'}\`,
           variant: "destructive",
         });
       }
     }
   };
+
+  const handleDragEvents = (e: React.DragEvent<HTMLLabelElement>, type: 'enter' | 'leave') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'enter') {
+      setIsDraggingOver(true);
+    } else {
+      setIsDraggingOver(false);
+    }
+  };
+  
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>, controllerOnChange: (...event: any[]) => void) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    
+    const newFilesFromDrop = e.dataTransfer.files;
+
+    if (newFilesFromDrop && newFilesFromDrop.length > 0) {
+      const newFilesArray = Array.from(newFilesFromDrop);
+      const currentFilesInForm = formFileField instanceof FileList ? Array.from(formFileField) : [];
+      
+      const combinedFiles = [...currentFilesInForm];
+      newFilesArray.forEach(newFile => {
+        if (!currentFilesInForm.some(existingFile => 
+            existingFile.name === newFile.name && 
+            existingFile.size === newFile.size &&
+            existingFile.lastModified === newFile.lastModified
+        )) {
+          combinedFiles.push(newFile);
+        }
+      });
+
+      const dataTransfer = new DataTransfer();
+      combinedFiles.forEach(file => dataTransfer.items.add(file));
+      const newCombinedFileList = dataTransfer.files;
+      controllerOnChange(newCombinedFileList.length > 0 ? newCombinedFileList : undefined);
+    }
+  };
+
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
@@ -184,7 +221,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
               id="keyword-uploadform"
               {...control.register('keyword')}
               placeholder="e.g., project-alpha-files"
-              className={`${errors.keyword ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}`}
+              className={\`\${errors.keyword ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}\`}
               aria-invalid={errors.keyword ? "true" : "false"}
             />
             {errors.keyword && <p className="text-sm text-destructive">{errors.keyword.message}</p>}
@@ -200,16 +237,21 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
               <div>
                 <Label
                   htmlFor="file-uploadform-trigger"
-                  className={`
+                  className={\`
                     flex flex-col items-center justify-center w-full h-32 px-4
                     border-2 border-dashed rounded-lg cursor-pointer
                     bg-card hover:bg-muted/75 transition-colors
-                    ${fieldState.error ? 'border-destructive hover:border-destructive/75' : 'border-input hover:border-primary/50'}
-                  `}
+                    \${fieldState.error ? 'border-destructive hover:border-destructive/75' 
+                        : isDraggingOver ? 'border-primary ring-2 ring-primary' : 'border-input hover:border-primary/50'}
+                  \`}
+                  onDragEnter={(e) => handleDragEvents(e, 'enter')}
+                  onDragOver={(e) => handleDragEvents(e, 'enter')} // Also handleDragOver for continuous feedback
+                  onDragLeave={(e) => handleDragEvents(e, 'leave')}
+                  onDrop={(e) => handleDrop(e, controllerOnChange)}
                 >
                   <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <UploadCloud className={`w-8 h-8 mb-3 ${fieldState.error ? 'text-destructive' : 'text-primary'}`} />
-                    <p className={`mb-2 text-sm ${fieldState.error ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    <UploadCloud className={\`w-8 h-8 mb-3 \${fieldState.error ? 'text-destructive' : isDraggingOver ? 'text-primary' : 'text-primary'}\`} />
+                    <p className={\`mb-2 text-sm \${fieldState.error ? 'text-destructive' : 'text-muted-foreground'}\`}>
                       <span className="font-semibold">Click to upload</span> or drag and drop
                     </p>
                     <p className="text-xs text-muted-foreground/80">Max 10MB per file</p>
@@ -223,11 +265,10 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
                     name={name}
                     ref={controllerRef}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                      const newFilesFromDialog = e.target.files; // This is a FileList
+                      const newFilesFromDialog = e.target.files; 
 
                       if (newFilesFromDialog && newFilesFromDialog.length > 0) {
                         const newFilesArray = Array.from(newFilesFromDialog);
-                        
                         const currentFilesInForm = formFileField instanceof FileList ? Array.from(formFileField) : [];
                 
                         const combinedFiles = [...currentFilesInForm];
@@ -245,7 +286,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
                         combinedFiles.forEach(file => dataTransfer.items.add(file));
                         const newCombinedFileList = dataTransfer.files;
                 
-                        controllerOnChange(newCombinedFileList);
+                        controllerOnChange(newCombinedFileList.length > 0 ? newCombinedFileList : undefined);
                       }
                     }}
                     aria-invalid={!!fieldState.error}
@@ -261,7 +302,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
               <p className="font-medium mb-2 text-foreground">Selected files ({selectedFiles.length}):</p>
               <ul className="space-y-1 max-h-40 overflow-y-auto">
                 {selectedFiles.map((file, index) => (
-                  <li key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center justify-between group p-1 hover:bg-muted/50 rounded">
+                  <li key={\`\${file.name}-\${file.lastModified}-\${index}\`} className="flex items-center justify-between group p-1 hover:bg-muted/50 rounded">
                     <div className="flex items-center truncate">
                       <Paperclip className="h-4 w-4 mr-2 shrink-0 text-primary/80" />
                       <span className="truncate">{file.name}</span>
@@ -272,7 +313,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
                       size="icon"
                       className="h-6 w-6 opacity-50 group-hover:opacity-100 text-destructive hover:bg-destructive/10"
                       onClick={() => handleRemoveFile(file)}
-                      aria-label={`Remove ${file.name}`}
+                      aria-label={\`Remove \${file.name}\`}
                     >
                       <XCircle className="h-4 w-4" />
                     </Button>
@@ -284,20 +325,20 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
         </div>
 
         {!onUploadSuccess && uploadSummary && (uploadSummary.success.length > 0 || uploadSummary.failed.length > 0) && origin && (
-          <div className={`p-4 border rounded-md space-y-3 ${uploadSummary.failed.length > 0 && uploadSummary.success.length === 0 ? 'bg-destructive/10 border-destructive text-destructive' : 'bg-accent/10 border-accent text-accent-foreground'}`}>
+          <div className={\`p-4 border rounded-md space-y-3 \${uploadSummary.failed.length > 0 && uploadSummary.success.length === 0 ? 'bg-destructive/10 border-destructive text-destructive' : 'bg-accent/10 border-accent text-accent-foreground'}\`}>
             <div className="flex items-start gap-3">
-              {uploadSummary.success.length > 0 && <Link2 className={`h-5 w-5 ${uploadSummary.failed.length > 0 ? 'text-accent' : 'text-accent'} shrink-0 mt-1`} />}
+              {uploadSummary.success.length > 0 && <Link2 className={\`h-5 w-5 \${uploadSummary.failed.length > 0 ? 'text-accent' : 'text-accent'} shrink-0 mt-1\`} />}
               {uploadSummary.failed.length > 0 && uploadSummary.success.length === 0 && <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-1" />}
               <div>
-                <p className={`font-medium ${uploadSummary.failed.length > 0 && uploadSummary.success.length === 0 ? 'text-destructive' : 'text-accent'}`}>
+                <p className={\`font-medium \${uploadSummary.failed.length > 0 && uploadSummary.success.length === 0 ? 'text-destructive' : 'text-accent'}\`}>
                   {uploadSummary.success.length > 0 ?
-                    `${uploadSummary.success.length} file(s) processed! ${uploadSummary.failed.length > 0 ? `(${uploadSummary.failed.length} failed)` : ''} Access keyword page:` :
+                    \`\${uploadSummary.success.length} file(s) processed! \${uploadSummary.failed.length > 0 ? \`(\${uploadSummary.failed.length} failed)\` : ''} Access keyword page:\` :
                     "Uploads Processed"}
                 </p>
                 {uploadSummary.success.length > 0 && uploadedFileLink && (
-                  <Link href={uploadedFileLink} target="_blank" rel="noopener noreferrer" className={`${uploadSummary.failed.length > 0 ? 'text-accent hover:underline' : 'text-accent hover:underline'} font-semibold break-all`}>
-                    {`${origin}${uploadedFileLink}`}
-                  </Link>
+                  <a href={uploadedFileLink} target="_blank" rel="noopener noreferrer" className={\`\${uploadSummary.failed.length > 0 ? 'text-accent hover:underline' : 'text-accent hover:underline'} font-semibold break-all\`}>
+                    {\`\${origin}\${uploadedFileLink}\`}
+                  </a>
                 )}
               </div>
             </div>
