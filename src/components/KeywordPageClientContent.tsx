@@ -154,14 +154,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
           </p>
       </div>
       
-      <div className="text-center mb-8"> {/* Added a div for centering the button */}
-        <Button variant="outline" asChild size="sm">
-          <Link href="/">
-            <Home className="mr-2 h-4 w-4" /> Go to Homepage
-          </Link>
-        </Button>
-      </div>
-
       {currentFiles && currentFiles.length > 0 ? (
         <Card className="mb-8 shadow-xl border-primary/20">
           <CardHeader>
