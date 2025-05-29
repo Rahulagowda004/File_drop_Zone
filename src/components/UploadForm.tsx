@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { UploadCloud, Link2, Loader2, AlertTriangle, Paperclip, XCircle } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -51,12 +53,12 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     resolver: zodResolver(formSchema),
     defaultValues: {
       keyword: fixedKeyword || '',
-      file: undefined,
+      file: undefined, 
     }
   });
 
-  const formFileField = watch('file'); // This is a FileList or undefined
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const formFileField = watch('file'); // This is a FileList or undefined from RHF
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]); // For UI display and manipulation
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -70,6 +72,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     }
   }, [fixedKeyword, setValue]);
 
+  // Sync local selectedFiles (for UI) with RHF's formFileField
   useEffect(() => {
     if (formFileField instanceof FileList) {
       setSelectedFiles(Array.from(formFileField));
@@ -80,12 +83,12 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
 
   const handleRemoveFile = (fileToRemove: File) => {
     const newSelectedFilesArray = selectedFiles.filter(file => file !== fileToRemove);
-    setSelectedFiles(newSelectedFilesArray);
-
+    
     const dataTransfer = new DataTransfer();
     newSelectedFilesArray.forEach(file => dataTransfer.items.add(file));
     const newFileList = dataTransfer.files;
-    setValue('file', newFileList, { shouldValidate: true });
+    setValue('file', newFileList, { shouldValidate: true }); 
+    // useEffect will sync selectedFiles state for UI
   };
 
 
@@ -95,7 +98,6 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     setUploadSummary(null);
 
     if (!data.file || data.file.length === 0) {
-      // This check is redundant if Zod validation works, but good as a safeguard
       toast({ title: "No Files Selected", description: "Please select one or more files to upload.", variant: "destructive" });
       setIsLoading(false);
       return;
@@ -134,7 +136,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
       keyword: fixedKeyword || '', 
       file: undefined 
     });
-    // setSelectedFiles([]); // UI will be cleared by useEffect watching formFileField after reset
+    // UI selectedFiles will be cleared by useEffect watching formFileField after reset
 
     if (onUploadSuccess) {
       if (successfulUploads.length > 0) {
@@ -162,7 +164,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
           description: `${successfulUploads.length} file(s) uploaded to keyword '${keywordToSubmit}'. ${failedUploads.length > 0 ? `${failedUploads.length} file(s) failed.` : ''}`,
           variant: failedUploads.length > 0 ? "default" : "default",
         });
-      } else if (filesToUpload.length > 0) { // Only show if files were attempted
+      } else if (filesToUpload.length > 0) {
          toast({
           title: "All Uploads Failed",
           description: `Could not upload any files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
@@ -221,18 +223,30 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
                     name={name}
                     ref={controllerRef}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                      const files = e.target.files;
-                      if (files && files.length > 0) {
-                        controllerOnChange(files);
-                      } else {
-                        // Ensure an empty FileList is passed if no files are selected or dialog is cancelled
-                        controllerOnChange(new DataTransfer().files);
+                      const newFilesFromDialog = e.target.files; // This is a FileList
+
+                      if (newFilesFromDialog && newFilesFromDialog.length > 0) {
+                        const newFilesArray = Array.from(newFilesFromDialog);
+                        
+                        const currentFilesInForm = formFileField instanceof FileList ? Array.from(formFileField) : [];
+                
+                        const combinedFiles = [...currentFilesInForm];
+                        newFilesArray.forEach(newFile => {
+                          if (!currentFilesInForm.some(existingFile => 
+                              existingFile.name === newFile.name && 
+                              existingFile.size === newFile.size &&
+                              existingFile.lastModified === newFile.lastModified
+                          )) {
+                            combinedFiles.push(newFile);
+                          }
+                        });
+                
+                        const dataTransfer = new DataTransfer();
+                        combinedFiles.forEach(file => dataTransfer.items.add(file));
+                        const newCombinedFileList = dataTransfer.files;
+                
+                        controllerOnChange(newCombinedFileList);
                       }
-                      // REMOVED: if (e.target) e.target.value = ''; 
-                      // This line was potentially causing issues with RHF state update timing.
-                      // Re-selection of the *exact same file* without deselecting from UI first
-                      // might not trigger onChange if the input's internal value hasn't changed.
-                      // This is a lesser issue than the validation failing.
                     }}
                     aria-invalid={!!fieldState.error}
                   />
@@ -247,7 +261,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
               <p className="font-medium mb-2 text-foreground">Selected files ({selectedFiles.length}):</p>
               <ul className="space-y-1 max-h-40 overflow-y-auto">
                 {selectedFiles.map((file, index) => (
-                  <li key={index} className="flex items-center justify-between group p-1 hover:bg-muted/50 rounded">
+                  <li key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center justify-between group p-1 hover:bg-muted/50 rounded">
                     <div className="flex items-center truncate">
                       <Paperclip className="h-4 w-4 mr-2 shrink-0 text-primary/80" />
                       <span className="truncate">{file.name}</span>
@@ -314,6 +328,3 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     </form>
   );
 }
-    
-
-    
