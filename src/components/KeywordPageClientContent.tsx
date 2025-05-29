@@ -200,7 +200,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                 </AlertDialog>
               </div>
             </div>
-            {/* CardDescription was removed from here in a previous step */}
           </CardHeader>
           <CardContent className="space-y-4">
             {currentFiles.map((file) => (
@@ -210,7 +209,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                     <h3 className="text-lg font-semibold text-primary break-all flex items-center">
                       <FileText className="h-5 w-5 mr-2 shrink-0" /> {file.fileName}
                     </h3>
-                    {/* File size and timestamp were removed from here in a previous step */}
                   </div>
                   <div className="flex gap-2 flex-shrink-0 sm:flex-col md:flex-row items-stretch">
                     <Button 
@@ -258,7 +256,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                     </AlertDialog>
                   </div>
                 </div>
-                {/* Conceptual download URL and shield alert text were removed here in previous steps */}
               </Card>
             ))}
           </CardContent>
@@ -277,13 +274,9 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
          </Card>
       )}
 
-      {/* Restored UploadForm Card */}
       <Card className="w-full shadow-xl border-primary/20 mt-8">
         <CardHeader>
           <CardTitle className="text-2xl text-primary">Add File(s) to "{keyword}"</CardTitle>
-          <CardDescription>
-            Upload new files to associate with this keyword. Ensure file names are unique for this keyword.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <UploadForm
@@ -307,3 +300,5 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     </div>
   );
 }
+
+    
