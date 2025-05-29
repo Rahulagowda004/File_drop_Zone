@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { UploadCloud, Droplets } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Droplets } from 'lucide-react';
+// Removed: import { UploadCloud } from 'lucide-react';
+// Removed: import { Button } from '@/components/ui/button';
 
 export default function Header() {
   return (
@@ -11,12 +12,14 @@ export default function Header() {
           File Drop Zone
         </Link>
         <nav>
+          {/* Removed Upload File Button
           <Button asChild variant="ghost" className="text-primary hover:bg-primary/10 hover:text-primary">
             <Link href="/upload">
               <UploadCloud className="mr-2 h-5 w-5" />
               Upload File
             </Link>
           </Button>
+          */}
         </nav>
       </div>
     </header>
