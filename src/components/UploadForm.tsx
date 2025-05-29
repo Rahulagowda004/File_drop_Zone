@@ -21,7 +21,7 @@ const formSchema = z.object({
     .regex(/^[a-zA-Z0-9_-]+$/, "Keyword can only contain letters, numbers, underscores, and hyphens."),
   file: z.custom<FileList>(
       (val) => {
-        if (typeof FileList === 'undefined') return true; 
+        if (typeof FileList === 'undefined') return true; // SSR Guard
         return val instanceof FileList;
       },
       "Input must be a FileList."
@@ -82,7 +82,6 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     const newSelectedFilesArray = selectedFiles.filter(file => file !== fileToRemove);
     setSelectedFiles(newSelectedFilesArray);
 
-    // Update react-hook-form's state
     const dataTransfer = new DataTransfer();
     newSelectedFilesArray.forEach(file => dataTransfer.items.add(file));
     const newFileList = dataTransfer.files;
@@ -96,6 +95,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     setUploadSummary(null);
 
     if (!data.file || data.file.length === 0) {
+      // This check is redundant if Zod validation works, but good as a safeguard
       toast({ title: "No Files Selected", description: "Please select one or more files to upload.", variant: "destructive" });
       setIsLoading(false);
       return;
@@ -134,7 +134,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
       keyword: fixedKeyword || '', 
       file: undefined 
     });
-    // setSelectedFiles([]); // Also reset local UI state for selected files on successful submission
+    // setSelectedFiles([]); // UI will be cleared by useEffect watching formFileField after reset
 
     if (onUploadSuccess) {
       if (successfulUploads.length > 0) {
@@ -150,7 +150,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
          toast({
               title: "Partial Upload Failure",
               description: `${successfulUploads.length} file(s) uploaded. ${failedUploads.length} file(s) failed. First failure: ${failedUploads[0].name} - ${failedUploads[0].error}`,
-              variant: "default", // Kept as default as it's a mix
+              variant: "default", 
           });
       }
     } else { 
@@ -162,7 +162,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
           description: `${successfulUploads.length} file(s) uploaded to keyword '${keywordToSubmit}'. ${failedUploads.length > 0 ? `${failedUploads.length} file(s) failed.` : ''}`,
           variant: failedUploads.length > 0 ? "default" : "default",
         });
-      } else if (filesToUpload.length > 0) {
+      } else if (filesToUpload.length > 0) { // Only show if files were attempted
          toast({
           title: "All Uploads Failed",
           description: `Could not upload any files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
@@ -194,7 +194,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
           <Controller
             name="file"
             control={control}
-            render={({ field: { onChange: controllerOnChange, onBlur, name, ref }, fieldState }) => (
+            render={({ field: { onChange: controllerOnChange, onBlur, name, ref: controllerRef }, fieldState }) => (
               <div>
                 <Label
                   htmlFor="file-uploadform-trigger"
@@ -219,16 +219,20 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
                     className="sr-only"
                     onBlur={onBlur}
                     name={name}
-                    ref={ref}
+                    ref={controllerRef}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => {
                       const files = e.target.files;
                       if (files && files.length > 0) {
                         controllerOnChange(files);
                       } else {
+                        // Ensure an empty FileList is passed if no files are selected or dialog is cancelled
                         controllerOnChange(new DataTransfer().files);
                       }
-                       // Clear the input value to allow re-selecting the same file(s) if needed after removal
-                      if (e.target) e.target.value = '';
+                      // REMOVED: if (e.target) e.target.value = ''; 
+                      // This line was potentially causing issues with RHF state update timing.
+                      // Re-selection of the *exact same file* without deselecting from UI first
+                      // might not trigger onChange if the input's internal value hasn't changed.
+                      // This is a lesser issue than the validation failing.
                     }}
                     aria-invalid={!!fieldState.error}
                   />
@@ -310,4 +314,6 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     </form>
   );
 }
+    
+
     
