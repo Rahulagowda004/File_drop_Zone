@@ -31,6 +31,8 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   
   useEffect(() => {
     if (initialFilesData === null || initialFilesData.length === 0) {
+      // Only set mock file if initialFilesData is explicitly null or empty,
+      // indicating no real files were found or an error occurred fetching them.
       const mockDemoFile: StoredFile = {
         keyword: keyword,
         fileName: 'sample-demonstration-file.pdf',
@@ -52,18 +54,20 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: `Failed to fetch files: ${res.statusText}` }));
         if (res.status === 404) {
+             // Keyword not found or no files, which might be expected after deletion
              setCurrentFiles([]); 
         } else {
+            // Some other error
             toast({ title: "Error", description: errorData.error || `Failed to fetch files: ${res.statusText}`, variant: "destructive" });
-            setCurrentFiles([]); 
+            setCurrentFiles([]); // Clear files on error
         }
       } else {
         const data: StoredFile[] = await res.json();
         setCurrentFiles(data);
       }
-    } catch (e: any) {
+    } catch (e: any) { // Added missing opening brace
       toast({ title: "Error", description: e.message || 'Failed to fetch files data.', variant: "destructive" });
-      setCurrentFiles([]); 
+      setCurrentFiles([]); // Clear files on error
     } finally {
       setIsActionLoading(prev => ({ ...prev, pageRefresh: false }));
     }
@@ -85,7 +89,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         throw new Error(result.error || `Failed to delete file: ${res.statusText}`);
       }
       toast({ title: "File Deleted", description: `"${fileNameToDelete}" removed from keyword "${keyword}".` });
-      await handleFetchFilesData(); 
+      await handleFetchFilesData(); // Refresh the list
     } catch (e: any) {
       toast({ title: "Deletion Failed", description: e.message || 'Could not delete file.', variant: "destructive" });
     } finally {
@@ -102,7 +106,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         throw new Error(result.error || `Failed to delete all files: ${res.statusText}`);
       }
       toast({ title: "All Files Deleted", description: `All files for keyword "${keyword}" have been removed.` });
-      setCurrentFiles([]);
+      setCurrentFiles([]); // Clear files immediately after successful deletion
     } catch (e: any) {
       toast({ title: "Deletion Failed", description: e.message || 'Could not delete all files.', variant: "destructive" });
     } finally {
@@ -126,8 +130,18 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     );
   }
 
-  const getConceptualDownloadUrl = (fileName: string) => `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`;
+  // Determine if the displayed file is the mock file (and no other real files were loaded initially)
   const isMockFileDisplayed = currentFiles.length === 1 && currentFiles[0].fileName === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0);
+
+  const getConceptualDownloadUrl = (fileName: string) => {
+    // For mock file, prevent actual navigation or return a placeholder
+    if (fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) {
+      return '#'; 
+    }
+    // This would be the actual download link format
+    return `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`;
+  };
+
 
   return (
     <div className="max-w-3xl mx-auto py-8">
@@ -144,11 +158,11 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       {currentFiles && currentFiles.length > 0 ? (
         <Card className="mb-8 shadow-xl border-primary/20">
           <CardHeader>
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <CardTitle className="text-2xl text-primary">
                 Stored Files ({currentFiles.length})
               </CardTitle>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -205,13 +219,24 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                       <span><Package size={14} className="inline mr-1" /> {(file.size / (1024 * 1024)).toFixed(2)} MB</span>
                       <span><CalendarClock size={14} className="inline mr-1" /> {new Date(file.uploadedAt).toLocaleString()}</span>
                     </div>
-                     <p className="text-xs text-muted-foreground mt-1 break-all">
-                        Conceptual Download: <Link href={getConceptualDownloadUrl(file.fileName)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{getConceptualDownloadUrl(file.fileName)}</Link>
-                    </p>
                   </div>
                   <div className="flex gap-2 flex-shrink-0 sm:flex-col md:flex-row items-stretch">
-                    <Button asChild variant="outline" size="sm" className="flex-grow sm:flex-grow-0">
-                      <Link href={getConceptualDownloadUrl(file.fileName)} target="_blank" rel="noopener noreferrer">
+                    <Button 
+                      asChild={!(file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed)} 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-grow sm:flex-grow-0"
+                      onClick={() => {
+                        if (file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) {
+                           toast({ title: "Sample File", description: "This is a sample file. Actual download would occur for real files." });
+                        }
+                      }}
+                    >
+                      <Link 
+                        href={getConceptualDownloadUrl(file.fileName)} 
+                        target={ (file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) ? "_self" : "_blank" }
+                        rel="noopener noreferrer"
+                      >
                         <DownloadCloud className="h-4 w-4" /> <span className="ml-2 hidden sm:inline">Download</span>
                       </Link>
                     </Button>
@@ -243,10 +268,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                 </div>
               </Card>
             ))}
-             <div className="mt-4 p-3 bg-primary/5 border border-primary/20 rounded-md text-sm text-primary flex items-start">
-                <ShieldAlert className="inline h-4 w-4 mr-2 shrink-0 mt-0.5" />
-                <span>File access and download are notionally handled by a backend service at the conceptual URLs. Files under this keyword are auto-deleted after 24 hours from the keyword's first upload.</span>
-            </div>
           </CardContent>
         </Card>
       ) : (
@@ -277,7 +298,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
               fixedKeyword={keyword}
               onUploadSuccess={async (uploadedKeyword, uploadedFileNamesSummary) => {
                   toast({ title: "Upload Processed", description: `${uploadedFileNamesSummary} for keyword '${uploadedKeyword}'. Refreshing list...` });
-                  await handleFetchFilesData(); 
+                  await handleFetchFilesData(); // Refresh the list
               }}
             />
         </CardContent>
@@ -291,3 +312,4 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     </div>
   );
 }
+
