@@ -20,7 +20,10 @@ const formSchema = z.object({
     .min(3, "Keyword must be at least 3 characters.")
     .max(50, "Keyword must be at most 50 characters.")
     .regex(/^[a-zA-Z0-9_-]+$/, "Keyword can only contain letters, numbers, underscores, and hyphens."),
-  file: z.instanceof(FileList)
+  file: z.custom<FileList>(
+      (val) => typeof FileList !== 'undefined' && val instanceof FileList,
+      "Input must be a FileList." // This message might not be shown directly if refine fails first
+    )
     .refine((files) => files && files.length > 0, "At least one file is required.")
     .refine(
       (files) => Array.from(files).every(file => file.size <= MAX_FILE_SIZE),
@@ -98,13 +101,12 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     }
     
     setIsLoading(false);
-    reset({ keyword: fixedKeyword || '', file: undefined });
+    reset({ keyword: fixedKeyword || '', file: undefined }); // Resetting FileList
 
     if (onUploadSuccess) {
       if (successfulUploads.length > 0) {
         onUploadSuccess(keywordToSubmit, `${successfulUploads.length} file(s) including "${successfulUploads[0]}"`);
       }
-      // Optionally, notify about failures too, though the parent mainly refreshes on success
       if (failedUploads.length > 0) {
         toast({
             title: "Some Uploads Failed",
@@ -116,11 +118,10 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
             title: "Upload Complete!",
             description: `${successfulUploads.length} file(s) successfully added to keyword '${keywordToSubmit}'.`,
         });
-      } else {
-        // All failed, no onUploadSuccess was called.
+      } else if (filesToUpload.length > 0) { // All failed, and there were files to upload
          toast({
             title: "Upload Failed",
-            description: `All ${filesToUpload.length} file(s) could not be uploaded. Please try again.`,
+            description: `All ${filesToUpload.length} file(s) could not be uploaded. First error: ${failedUploads[0]?.error || 'Unknown error'}.`,
             variant: "destructive",
         });
       }
@@ -132,9 +133,9 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
         toast({
           title: "Uploads Processed",
           description: `${successfulUploads.length} file(s) uploaded. ${failedUploads.length} file(s) failed.`,
-          variant: failedUploads.length > 0 ? "default" : "default", // 'default' or 'destructive' if all failed
+          variant: failedUploads.length > 0 ? "default" : "default", 
         });
-      } else {
+      } else if (filesToUpload.length > 0) { // All failed on standalone page
          toast({
           title: "All Uploads Failed",
           description: `Could not upload any of the selected files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
