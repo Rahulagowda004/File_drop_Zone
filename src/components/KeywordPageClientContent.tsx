@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -6,7 +7,7 @@ import UploadForm from '@/components/UploadForm';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { DownloadCloud, AlertTriangle, FileText, CalendarClock, Package, Home, UploadCloud, Trash2, Loader2, ListFiles, ShieldAlert } from 'lucide-react';
+import { DownloadCloud, AlertTriangle, FileText, CalendarClock, Package, Home, UploadCloud, Trash2, Loader2, Files, ShieldAlert } from 'lucide-react';
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 
@@ -112,7 +113,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   return (
     <div className="max-w-3xl mx-auto py-8">
       <div className="text-center mb-10">
-          <ListFiles className="h-16 w-16 text-primary mx-auto mb-4" />
+          <Files className="h-16 w-16 text-primary mx-auto mb-4" />
           <h1 className="text-3xl md:text-4xl font-bold text-primary mb-2">
             Files for Keyword: <span className="text-accent">{keyword}</span>
           </h1>
@@ -249,3 +250,5 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     </div>
   );
 }
+
+    
