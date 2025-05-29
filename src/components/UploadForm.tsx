@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { UploadCloud, Link2, Loader2, AlertTriangle, Paperclip } from 'lucide-react';
+import { UploadCloud, Link2, Loader2, AlertTriangle, Paperclip, XCircle } from 'lucide-react';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -21,8 +21,7 @@ const formSchema = z.object({
     .regex(/^[a-zA-Z0-9_-]+$/, "Keyword can only contain letters, numbers, underscores, and hyphens."),
   file: z.custom<FileList>(
       (val) => {
-        // This check ensures it only runs client-side or with a FileList-like object
-        if (typeof FileList === 'undefined') return true; // Pass on server if FileList is not defined
+        if (typeof FileList === 'undefined') return true; 
         return val instanceof FileList;
       },
       "Input must be a FileList."
@@ -52,12 +51,12 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     resolver: zodResolver(formSchema),
     defaultValues: {
       keyword: fixedKeyword || '',
-      file: undefined, // Initialize file as undefined
+      file: undefined,
     }
   });
 
-  const selectedFileList = watch('file');
-  const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
+  const formFileField = watch('file'); // This is a FileList or undefined
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -72,12 +71,23 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
   }, [fixedKeyword, setValue]);
 
   useEffect(() => {
-    if (selectedFileList instanceof FileList && selectedFileList.length > 0) {
-      setSelectedFileNames(Array.from(selectedFileList).map(f => f.name));
+    if (formFileField instanceof FileList) {
+      setSelectedFiles(Array.from(formFileField));
     } else {
-      setSelectedFileNames([]);
+      setSelectedFiles([]); 
     }
-  }, [selectedFileList]);
+  }, [formFileField]);
+
+  const handleRemoveFile = (fileToRemove: File) => {
+    const newSelectedFilesArray = selectedFiles.filter(file => file !== fileToRemove);
+    setSelectedFiles(newSelectedFilesArray);
+
+    // Update react-hook-form's state
+    const dataTransfer = new DataTransfer();
+    newSelectedFilesArray.forEach(file => dataTransfer.items.add(file));
+    const newFileList = dataTransfer.files;
+    setValue('file', newFileList, { shouldValidate: true });
+  };
 
 
   const onSubmit: SubmitHandler<FormData> = async (data) => {
@@ -122,27 +132,28 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     setIsLoading(false);
     reset({ 
       keyword: fixedKeyword || '', 
-      file: undefined // Reset file field to undefined
+      file: undefined 
     });
+    // setSelectedFiles([]); // Also reset local UI state for selected files on successful submission
 
     if (onUploadSuccess) {
       if (successfulUploads.length > 0) {
         onUploadSuccess(keywordToSubmit, `${successfulUploads.length} file(s) including "${successfulUploads[0]}" processed.`);
       } 
-      if (failedUploads.length > 0 && successfulUploads.length === 0) { // All failed
+      if (failedUploads.length > 0 && successfulUploads.length === 0) { 
          toast({
             title: "All Uploads Failed",
             description: `Could not upload any files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
             variant: "destructive",
         });
-      } else if (failedUploads.length > 0) { // Partial failure
+      } else if (failedUploads.length > 0) { 
          toast({
               title: "Partial Upload Failure",
               description: `${successfulUploads.length} file(s) uploaded. ${failedUploads.length} file(s) failed. First failure: ${failedUploads[0].name} - ${failedUploads[0].error}`,
-              variant: "default",
+              variant: "default", // Kept as default as it's a mix
           });
       }
-    } else { // Standalone upload page logic
+    } else { 
       setUploadSummary({ success: successfulUploads, failed: failedUploads });
       if (successfulUploads.length > 0) {
         setUploadedFileLink(`/${keywordToSubmit}`);
@@ -183,7 +194,6 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
           <Controller
             name="file"
             control={control}
-            // No defaultValue here, it's handled by useForm's defaultValues
             render={({ field: { onChange: controllerOnChange, onBlur, name, ref }, fieldState }) => (
               <div>
                 <Label
@@ -215,10 +225,10 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
                       if (files && files.length > 0) {
                         controllerOnChange(files);
                       } else {
-                        // Pass an empty FileList if no files are selected or selection is cleared.
-                        // This ensures the type passed to Zod for validation is consistent.
                         controllerOnChange(new DataTransfer().files);
                       }
+                       // Clear the input value to allow re-selecting the same file(s) if needed after removal
+                      if (e.target) e.target.value = '';
                     }}
                     aria-invalid={!!fieldState.error}
                   />
@@ -228,14 +238,26 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
             )}
           />
 
-          {selectedFileNames.length > 0 && (
+          {selectedFiles.length > 0 && (
             <div className="mt-3 p-3 bg-muted/20 border border-border rounded-md text-sm">
-              <p className="font-medium mb-2 text-foreground">Selected files ({selectedFileNames.length}):</p>
-              <ul className="list-disc list-inside space-y-1 max-h-32 overflow-y-auto text-muted-foreground">
-                {selectedFileNames.map((name, index) => (
-                  <li key={index} className="truncate flex items-center">
-                    <Paperclip className="h-4 w-4 mr-2 shrink-0 text-primary/80" />
-                    {name}
+              <p className="font-medium mb-2 text-foreground">Selected files ({selectedFiles.length}):</p>
+              <ul className="space-y-1 max-h-40 overflow-y-auto">
+                {selectedFiles.map((file, index) => (
+                  <li key={index} className="flex items-center justify-between group p-1 hover:bg-muted/50 rounded">
+                    <div className="flex items-center truncate">
+                      <Paperclip className="h-4 w-4 mr-2 shrink-0 text-primary/80" />
+                      <span className="truncate">{file.name}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-50 group-hover:opacity-100 text-destructive hover:bg-destructive/10"
+                      onClick={() => handleRemoveFile(file)}
+                      aria-label={`Remove ${file.name}`}
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </Button>
                   </li>
                 ))}
               </ul>
