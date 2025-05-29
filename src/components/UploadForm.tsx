@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, type ChangeEvent } from 'react';
-import { useForm, type SubmitHandler } from 'react-hook-form';
+import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { UploadCloud, Link2, Loader2, AlertTriangle, FileText, Paperclip } from 'lucide-react';
+import { UploadCloud, Link2, Loader2, AlertTriangle, Paperclip } from 'lucide-react';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -20,7 +20,11 @@ const formSchema = z.object({
     .max(50, "Keyword must be at most 50 characters.")
     .regex(/^[a-zA-Z0-9_-]+$/, "Keyword can only contain letters, numbers, underscores, and hyphens."),
   file: z.custom<FileList>(
-      (val) => typeof FileList !== 'undefined' && val instanceof FileList,
+      (val) => {
+        // This check ensures it only runs client-side or with a FileList-like object
+        if (typeof FileList === 'undefined') return true; // Pass on server if FileList is not defined
+        return val instanceof FileList;
+      },
       "Input must be a FileList."
     )
     .refine((files) => files && files.length > 0, "At least one file is required.")
@@ -43,32 +47,19 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
   const [uploadSummary, setUploadSummary] = useState<{success: string[], failed: {name: string, error: string}[] } | null>(null);
   const [origin, setOrigin] = useState('');
   const { toast } = useToast();
-  
-  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<FormData>({
+
+  const { handleSubmit, formState: { errors }, reset, watch, control, setValue } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       keyword: fixedKeyword || '',
-      // Initialize 'file' with an empty FileList on the client-side, undefined on SSR
-      file: typeof window !== 'undefined' ? new DataTransfer().files : undefined,
+      // file field will be managed by Controller's defaultValue or initialized as undefined
+      // file: undefined, // Explicitly undefined or let Controller handle it
     }
   });
 
   const selectedFileList = watch('file');
   const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      setValue('file', files, { shouldValidate: true }); // RHF updates and validates
-      // setSelectedFileNames will be updated by the useEffect watching selectedFileList
-    } else {
-      // Set to an empty FileList if no files are selected or selection is cleared
-      setValue('file', new DataTransfer().files, { shouldValidate: true }); // RHF updates and validates
-      // setSelectedFileNames will be updated by the useEffect watching selectedFileList
-    }
-    // Explicit trigger('file') removed as shouldValidate:true in setValue should handle it
-  };
-  
   useEffect(() => {
     if (typeof window !== "undefined") {
       setOrigin(window.location.origin);
@@ -81,9 +72,8 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     }
   }, [fixedKeyword, setValue]);
 
-  // Update selectedFileNames display when the 'file' field in react-hook-form changes
   useEffect(() => {
-    if (selectedFileList) {
+    if (selectedFileList instanceof FileList) {
       setSelectedFileNames(Array.from(selectedFileList).map(f => f.name));
     } else {
       setSelectedFileNames([]);
@@ -97,7 +87,6 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     setUploadSummary(null);
 
     if (!data.file || data.file.length === 0) {
-      // This check is redundant if Zod validation is working, but good as a fallback.
       toast({ title: "No Files Selected", description: "Please select one or more files to upload.", variant: "destructive" });
       setIsLoading(false);
       return;
@@ -105,7 +94,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
 
     const filesToUpload = Array.from(data.file);
     const keywordToSubmit = fixedKeyword || data.keyword;
-    
+
     let successfulUploads: string[] = [];
     let failedUploads: {name: string, error: string}[] = [];
 
@@ -130,26 +119,28 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
         failedUploads.push({ name: fileItem.name, error: error.message || `An unexpected error occurred for ${fileItem.name}.` });
       }
     }
-    
+
     setIsLoading(false);
-    // Reset form: also reset the 'file' field to an empty FileList for client consistency
-    reset({ keyword: fixedKeyword || '', file: typeof window !== 'undefined' ? new DataTransfer().files : undefined }); 
-    // selectedFileNames will be cleared by the useEffect watching selectedFileList after reset
+    reset({ 
+      keyword: fixedKeyword || '', 
+      file: (typeof window !== 'undefined' ? new DataTransfer().files : undefined) as unknown as FileList // Reset file field
+    });
 
     if (onUploadSuccess) {
       if (successfulUploads.length > 0) {
         onUploadSuccess(keywordToSubmit, `${successfulUploads.length} file(s) including "${successfulUploads[0]}" processed.`);
-      } else if (filesToUpload.length > 0 && failedUploads.length === filesToUpload.length) {
-        toast({
+      } 
+      if (failedUploads.length > 0 && successfulUploads.length === 0) { // All failed
+         toast({
             title: "All Uploads Failed",
             description: `Could not upload any files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
             variant: "destructive",
         });
       } else if (failedUploads.length > 0) { // Partial failure
          toast({
-              title: "Partial Upload Success",
+              title: "Partial Upload Failure",
               description: `${successfulUploads.length} file(s) uploaded. ${failedUploads.length} file(s) failed. First failure: ${failedUploads[0].name} - ${failedUploads[0].error}`,
-              variant: "default", 
+              variant: "default",
           });
       }
     } else { // Standalone upload page logic
@@ -159,9 +150,9 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
          toast({
           title: successfulUploads.length === filesToUpload.length ? "All Uploads Successful!" : "Uploads Processed",
           description: `${successfulUploads.length} file(s) uploaded to keyword '${keywordToSubmit}'. ${failedUploads.length > 0 ? `${failedUploads.length} file(s) failed.` : ''}`,
-          variant: failedUploads.length > 0 ? "default" : "default",
+          variant: failedUploads.length > 0 ? "default" : "default", // "default" is fine, "success" if available
         });
-      } else if (filesToUpload.length > 0) { 
+      } else if (filesToUpload.length > 0) {
          toast({
           title: "All Uploads Failed",
           description: `Could not upload any files. First failure: ${failedUploads[0]?.name} - ${failedUploads[0]?.error || 'Unknown error'}`,
@@ -177,9 +168,9 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
         {!fixedKeyword && (
           <div className="space-y-2">
             <Label htmlFor="keyword-uploadform" className="font-semibold">Unique Keyword</Label>
-            <Input 
-              id="keyword-uploadform" 
-              {...register('keyword')} 
+            <Input
+              id="keyword-uploadform"
+              {...control.register('keyword')}
               placeholder="e.g., project-alpha-files"
               className={`${errors.keyword ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}`}
               aria-invalid={errors.keyword ? "true" : "false"}
@@ -190,42 +181,59 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
 
         <div className="space-y-2">
           <Label htmlFor="file-uploadform-trigger" className="font-semibold">Files</Label>
-          <Label 
-            htmlFor="file-uploadform-trigger" 
-            className={`
-              flex flex-col items-center justify-center w-full h-32 px-4 
-              border-2 border-dashed rounded-lg cursor-pointer 
-              bg-card hover:bg-muted/75 transition-colors
-              ${errors.file ? 'border-destructive hover:border-destructive/75' : 'border-input hover:border-primary/50'}
-            `}
-          >
-            <div className="flex flex-col items-center justify-center pt-5 pb-6">
-              <UploadCloud className={`w-8 h-8 mb-3 ${errors.file ? 'text-destructive' : 'text-primary'}`} />
-              <p className={`mb-2 text-sm ${errors.file ? 'text-destructive' : 'text-muted-foreground'}`}>
-                <span className="font-semibold">Click to upload</span> or drag and drop
-              </p>
-              <p className="text-xs text-muted-foreground/80">Max 10MB per file</p>
-            </div>
-            {/* We use register for RHF to be aware of the field, but handle change manually for UI updates */}
-            <Input 
-              id="file-uploadform-trigger" 
-              type="file"
-              multiple
-              className="sr-only" 
-              {...register('file')} // Register the field with RHF
-              onChange={handleFileChange} // Use custom onChange to call setValue and update UI state
-              aria-invalid={errors.file ? "true" : "false"}
-            />
-          </Label>
-          {errors.file && <p className="text-sm text-destructive">{errors.file.message}</p>}
-          
+          <Controller
+            name="file"
+            control={control}
+            defaultValue={ (typeof window !== "undefined" ? new DataTransfer().files : undefined) as FileList | undefined }
+            render={({ field: { onChange: controllerOnChange, onBlur, name, ref }, fieldState }) => (
+              <div>
+                <Label
+                  htmlFor="file-uploadform-trigger"
+                  className={`
+                    flex flex-col items-center justify-center w-full h-32 px-4
+                    border-2 border-dashed rounded-lg cursor-pointer
+                    bg-card hover:bg-muted/75 transition-colors
+                    ${fieldState.error ? 'border-destructive hover:border-destructive/75' : 'border-input hover:border-primary/50'}
+                  `}
+                >
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <UploadCloud className={`w-8 h-8 mb-3 ${fieldState.error ? 'text-destructive' : 'text-primary'}`} />
+                    <p className={`mb-2 text-sm ${fieldState.error ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      <span className="font-semibold">Click to upload</span> or drag and drop
+                    </p>
+                    <p className="text-xs text-muted-foreground/80">Max 10MB per file</p>
+                  </div>
+                  <Input
+                    id="file-uploadform-trigger"
+                    type="file"
+                    multiple
+                    className="sr-only"
+                    onBlur={onBlur}
+                    name={name}
+                    ref={ref}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                      const files = e.target.files;
+                      if (files && files.length > 0) {
+                        controllerOnChange(files);
+                      } else {
+                        controllerOnChange(typeof window !== 'undefined' ? new DataTransfer().files : undefined);
+                      }
+                    }}
+                    aria-invalid={!!fieldState.error}
+                  />
+                </Label>
+                {fieldState.error && <p className="text-sm text-destructive">{fieldState.error.message}</p>}
+              </div>
+            )}
+          />
+
           {selectedFileNames.length > 0 && (
             <div className="mt-3 p-3 bg-muted/20 border border-border rounded-md text-sm">
               <p className="font-medium mb-2 text-foreground">Selected files ({selectedFileNames.length}):</p>
               <ul className="list-disc list-inside space-y-1 max-h-32 overflow-y-auto text-muted-foreground">
                 {selectedFileNames.map((name, index) => (
                   <li key={index} className="truncate flex items-center">
-                    <Paperclip className="h-4 w-4 mr-2 shrink-0 text-primary/80" /> 
+                    <Paperclip className="h-4 w-4 mr-2 shrink-0 text-primary/80" />
                     {name}
                   </li>
                 ))}
@@ -234,7 +242,6 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
           )}
         </div>
 
-        {/* Display summary for standalone upload page */}
         {!onUploadSuccess && uploadSummary && (uploadSummary.success.length > 0 || uploadSummary.failed.length > 0) && origin && (
           <div className={`p-4 border rounded-md space-y-3 ${uploadSummary.failed.length > 0 && uploadSummary.success.length === 0 ? 'bg-destructive/10 border-destructive text-destructive' : 'bg-accent/10 border-accent text-accent-foreground'}`}>
             <div className="flex items-start gap-3">
@@ -242,8 +249,8 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
               {uploadSummary.failed.length > 0 && uploadSummary.success.length === 0 && <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-1" />}
               <div>
                 <p className={`font-medium ${uploadSummary.failed.length > 0 && uploadSummary.success.length === 0 ? 'text-destructive' : 'text-accent'}`}>
-                  {uploadSummary.success.length > 0 ? 
-                    `${uploadSummary.success.length} file(s) processed for keyword! ${uploadSummary.failed.length > 0 ? `(${uploadSummary.failed.length} failed)` : ''} Access keyword page:` :
+                  {uploadSummary.success.length > 0 ?
+                    `${uploadSummary.success.length} file(s) processed! ${uploadSummary.failed.length > 0 ? `(${uploadSummary.failed.length} failed)` : ''} Access keyword page:` :
                     "Uploads Processed"}
                 </p>
                 {uploadSummary.success.length > 0 && uploadedFileLink && (
@@ -256,7 +263,7 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
             {uploadSummary.failed.length > 0 && (
               <div className="p-3 bg-destructive/10 border border-destructive rounded-md text-destructive mt-2">
                 <div className="flex items-center gap-2 font-semibold mb-1">
-                   <AlertTriangle size={16} /> 
+                   <AlertTriangle size={16} />
                    <p>{uploadSummary.failed.length} file(s) failed to upload:</p>
                 </div>
                 <ul className="list-disc list-inside text-sm space-y-1 max-h-32 overflow-y-auto">
