@@ -4,10 +4,10 @@
 import { useState, useEffect } from 'react';
 import type { StoredFile } from '@/lib/fileStore';
 import UploadForm from '@/components/UploadForm'; // Ensured this import is active
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { DownloadCloud, FileText, Home, Trash2, Loader2, Files } from 'lucide-react'; // Removed CalendarClock, Package, UploadCloud, ShieldAlert, AlertTriangle if they were only for removed sections
+import { DownloadCloud, FileText, Home, Trash2, Loader2, Files } from 'lucide-react';
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 
@@ -144,7 +144,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
 
   return (
     <div className="max-w-3xl mx-auto py-8">
-      <div className="text-center mb-10">
+      <div className="text-center mb-6"> {/* Reduced mb from 10 to 6 */}
           <Files className="h-16 w-16 text-primary mx-auto mb-4" />
           <h1 className="text-3xl md:text-4xl font-bold text-primary mb-2">
             Files for Keyword: <span className="text-accent">{keyword}</span>
@@ -152,6 +152,14 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
           <p className="text-md text-muted-foreground">
             Manage files associated with this keyword. Files are auto-deleted after 24 hours from the keyword's first upload.
           </p>
+      </div>
+      
+      <div className="text-center mb-8"> {/* Added a div for centering the button */}
+        <Button variant="outline" asChild size="sm">
+          <Link href="/">
+            <Home className="mr-2 h-4 w-4" /> Go to Homepage
+          </Link>
+        </Button>
       </div>
 
       {currentFiles && currentFiles.length > 0 ? (
@@ -291,14 +299,9 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
           />
         </CardContent>
       </Card>
-
-      <Button variant="outline" asChild className="w-full mt-8">
-        <Link href="/">
-          <Home className="mr-2 h-4 w-4" /> Go to Homepage
-        </Link>
-      </Button>
     </div>
   );
 }
+    
 
     
