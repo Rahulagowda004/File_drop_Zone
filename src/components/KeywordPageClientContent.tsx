@@ -1,13 +1,13 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
 import type { StoredFile } from '@/lib/fileStore';
 import UploadForm from '@/components/UploadForm';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { DownloadCloud, FileText, Trash2, Loader2, Files } from 'lucide-react';
+import { DownloadCloud, FileText, Trash2, Loader2, Files, Paperclip, XCircle } from 'lucide-react';
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 
@@ -29,6 +29,8 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     }
   }, []);
   
+  const isMockFileDisplayed = currentFiles.length === 1 && currentFiles[0].fileName === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0);
+
   useEffect(() => {
     if (initialFilesData === null || initialFilesData.length === 0) {
       const mockDemoFile: StoredFile = {
@@ -116,10 +118,34 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   };
 
   const handleDownloadAllFiles = () => {
-    toast({
-      title: "Conceptual Download",
-      description: "Downloading all files as a single archive is a conceptual feature. Actual implementation would require backend support for zipping files.",
-    });
+    if (isMockFileDisplayed) {
+        toast({
+            title: "Sample Files",
+            description: "This is a sample demonstration. For actual files, a ZIP download would be initiated.",
+            variant: "default"
+        });
+        return;
+    }
+    if (currentFiles.length === 0) {
+        toast({
+            title: "No Files",
+            description: "There are no files to download for this keyword.",
+            variant: "default"
+        });
+        return;
+    }
+    setIsActionLoading(prev => ({ ...prev, downloadAll: true }));
+    // Open the API endpoint in a new tab/window to trigger download
+    window.open(`/api/download/all/${keyword}`, '_blank');
+    // We don't have a direct way to know when the download finishes from window.open,
+    // so we'll reset the loading state after a short delay.
+    setTimeout(() => {
+         setIsActionLoading(prev => ({ ...prev, downloadAll: false }));
+         toast({
+            title: "Download Initiated",
+            description: `Preparing a ZIP archive for all files under keyword "${keyword}". Your browser will prompt you shortly.`,
+        });
+    }, 1500);
   };
 
   if (isLoadingPage || isActionLoading['pageRefresh']) {
@@ -131,14 +157,13 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     );
   }
 
-  const isMockFileDisplayed = currentFiles.length === 1 && currentFiles[0].fileName === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0);
 
   const getConceptualDownloadUrl = (fileName: string) => {
     if (fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) {
       return '#'; 
     }
     // This URL is conceptual for actual files.
-    return `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`;
+    return `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`; // This endpoint does not actually exist yet
   };
 
 
@@ -175,9 +200,9 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                   variant="outline" 
                   size="sm" 
                   onClick={handleDownloadAllFiles}
-                  disabled={isActionLoading['downloadAll'] || currentFiles.length === 0 || isMockFileDisplayed}
+                  disabled={isActionLoading['downloadAll'] || (currentFiles.length === 0 || isMockFileDisplayed)}
                 >
-                  {isActionLoading['downloadAll'] ? <Loader2 className="animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
+                  {isActionLoading['downloadAll'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
                   Download All
                 </Button>
                 <AlertDialog>
@@ -185,9 +210,9 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                     <Button 
                       variant="destructive" 
                       size="sm" 
-                      disabled={isActionLoading['deleteAll'] || currentFiles.length === 0 || (isMockFileDisplayed && (initialFilesData === null || initialFilesData.length === 0))}
+                      disabled={isActionLoading['deleteAll'] || currentFiles.length === 0 || isMockFileDisplayed }
                     >
-                      {isActionLoading['deleteAll'] ? <Loader2 className="animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                      {isActionLoading['deleteAll'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                       Delete All
                     </Button>
                   </AlertDialogTrigger>
@@ -196,7 +221,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                       <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                       <AlertDialogDescription>
                         This action will permanently delete all {currentFiles.length} file(s) for keyword "{keyword}". 
-                        {(isMockFileDisplayed && (initialFilesData === null || initialFilesData.length === 0)) ? " This will clear the sample file from view." : "This cannot be undone."}
+                        {(isMockFileDisplayed) ? " This will clear the sample file from view." : "This cannot be undone."}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -235,6 +260,11 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                         href={getConceptualDownloadUrl(file.fileName)} 
                         target={ (file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) ? "_self" : "_blank" }
                         rel="noopener noreferrer"
+                        // Individual file download link is conceptual and points to a non-existent API
+                        // It's kept for UI demonstration purposes.
+                        // The actual download for individual files relies on the "Public Access URL" mentioned in the PRD
+                        // which is `https://www.project.com/{keyword}` -- this would lead to the (external) FastAPI service.
+                        // For this button, we simulate a direct download link.
                       >
                         <DownloadCloud className="h-4 w-4" /> <span className="ml-2 hidden sm:inline">Download</span>
                       </Link>
@@ -242,7 +272,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                            <Button variant="destructive" size="sm" disabled={isActionLoading[file.fileName]} className="flex-grow sm:flex-grow-0">
-                                {isActionLoading[file.fileName] ? <Loader2 className="animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                {isActionLoading[file.fileName] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                                 <span className="ml-2 hidden sm:inline">Delete</span>
                             </Button>
                         </AlertDialogTrigger>
@@ -288,3 +318,4 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     
 
     
+
