@@ -31,13 +31,11 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   
   useEffect(() => {
     if (initialFilesData === null || initialFilesData.length === 0) {
-      // Only set mock file if initialFilesData is explicitly null or empty,
-      // indicating no real files were found or an error occurred fetching them.
       const mockDemoFile: StoredFile = {
         keyword: keyword,
         fileName: 'sample-demonstration-file.pdf',
         contentType: 'application/pdf',
-        size: 780 * 1024, // 780KB
+        size: 780 * 1024, 
         uploadedAt: new Date(),
       };
       setCurrentFiles([mockDemoFile]);
@@ -54,12 +52,10 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: `Failed to fetch files: ${res.statusText}` }));
         if (res.status === 404) {
-             // Keyword not found or no files, which might be expected after deletion
              setCurrentFiles([]); 
         } else {
-            // Some other error
             toast({ title: "Error", description: errorData.error || `Failed to fetch files: ${res.statusText}`, variant: "destructive" });
-            setCurrentFiles([]); // Clear files on error
+            setCurrentFiles([]); 
         }
       } else {
         const data: StoredFile[] = await res.json();
@@ -67,7 +63,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message || 'Failed to fetch files data.', variant: "destructive" });
-      setCurrentFiles([]); // Clear files on error
+      setCurrentFiles([]); 
     } finally {
       setIsActionLoading(prev => ({ ...prev, pageRefresh: false }));
     }
@@ -76,7 +72,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   const handleDeleteSingleFile = async (fileNameToDelete: string) => {
     setIsActionLoading(prev => ({ ...prev, [fileNameToDelete]: true }));
     try {
-      // If it's the mock file, just remove it from the local state
       if (fileNameToDelete === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0)) {
         setCurrentFiles([]);
         toast({ title: "Sample Cleared", description: "Sample demonstration file removed from view." });
@@ -89,7 +84,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         throw new Error(result.error || `Failed to delete file: ${res.statusText}`);
       }
       toast({ title: "File Deleted", description: `"${fileNameToDelete}" removed from keyword "${keyword}".` });
-      await handleFetchFilesData(); // Refresh the list
+      await handleFetchFilesData(); 
     } catch (e: any) {
       toast({ title: "Deletion Failed", description: e.message || 'Could not delete file.', variant: "destructive" });
     } finally {
@@ -100,8 +95,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   const handleDeleteAllFiles = async () => {
     setIsActionLoading(prev => ({ ...prev, deleteAll: true }));
     try {
-      // If only the mock file is displayed and no real files were initially loaded,
-      // simulate deletion by clearing the mock file.
       if (isMockFileDisplayed && (initialFilesData === null || initialFilesData.length === 0)) {
         setCurrentFiles([]);
         toast({ title: "Sample Cleared", description: "Sample demonstration file(s) removed from view." });
@@ -114,7 +107,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         throw new Error(result.error || `Failed to delete all files: ${res.statusText}`);
       }
       toast({ title: "All Files Deleted", description: `All files for keyword "${keyword}" have been removed.` });
-      setCurrentFiles([]); // Clear files immediately after successful deletion
+      setCurrentFiles([]); 
     } catch (e: any) {
       toast({ title: "Deletion Failed", description: e.message || 'Could not delete all files.', variant: "destructive" });
     } finally {
@@ -138,15 +131,12 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     );
   }
 
-  // Determine if the displayed file is the mock file (and no other real files were loaded initially)
   const isMockFileDisplayed = currentFiles.length === 1 && currentFiles[0].fileName === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0);
 
   const getConceptualDownloadUrl = (fileName: string) => {
-    // For mock file, prevent actual navigation or return a placeholder
     if (fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) {
       return '#'; 
     }
-    // This would be the actual download link format
     return `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`;
   };
 
@@ -218,10 +208,6 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                     <h3 className="text-lg font-semibold text-primary break-all flex items-center">
                       <FileText className="h-5 w-5 mr-2 shrink-0" /> {file.fileName}
                     </h3>
-                    <div className="text-xs text-muted-foreground space-x-3 mt-1">
-                      <span><Package size={14} className="inline mr-1" /> {(file.size / (1024 * 1024)).toFixed(2)} MB</span>
-                      <span><CalendarClock size={14} className="inline mr-1" /> {new Date(file.uploadedAt).toLocaleString()}</span>
-                    </div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0 sm:flex-col md:flex-row items-stretch">
                     <Button 
@@ -301,7 +287,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
               fixedKeyword={keyword}
               onUploadSuccess={async (uploadedKeyword, uploadedFileNamesSummary) => {
                   toast({ title: "Upload Processed", description: `${uploadedFileNamesSummary} for keyword '${uploadedKeyword}'. Refreshing list...` });
-                  await handleFetchFilesData(); // Refresh the list
+                  await handleFetchFilesData(); 
               }}
             />
         </CardContent>
@@ -316,3 +302,4 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   );
 }
 
+    
