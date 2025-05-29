@@ -26,15 +26,27 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
-export default function UploadForm() {
+interface UploadFormProps {
+  fixedKeyword?: string;
+  onUploadSuccess?: (uploadedKeyword: string) => void;
+}
+
+export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [uploadedFileLink, setUploadedFileLink] = useState<string | null>(null);
+  const [uploadedFileLink, setUploadedFileLink] = useState<string | null>(null); // Only used if onUploadSuccess is not provided
   const [origin, setOrigin] = useState('');
   const { toast } = useToast();
   
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<FormData>({
     resolver: zodResolver(formSchema),
+    defaultValues: {
+      keyword: fixedKeyword || '',
+      file: undefined,
+    }
   });
+
+  // Watch the file input to update its styling if a file is selected
+  const selectedFile = watch('file');
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -42,18 +54,26 @@ export default function UploadForm() {
     }
   }, []);
 
+  useEffect(() => {
+    if (fixedKeyword) {
+      setValue('keyword', fixedKeyword, { shouldValidate: true });
+    }
+  }, [fixedKeyword, setValue]);
+
   const onSubmit: SubmitHandler<FormData> = async (data) => {
     setIsLoading(true);
     setUploadedFileLink(null);
 
-    const formData = new FormData();
-    formData.append('keyword', data.keyword);
-    formData.append('file', data.file[0]);
+    const formDataPayload = new FormData();
+    // Use fixedKeyword if provided, otherwise use data.keyword from form
+    const keywordToSubmit = fixedKeyword || data.keyword;
+    formDataPayload.append('keyword', keywordToSubmit);
+    formDataPayload.append('file', data.file[0]);
 
     try {
       const response = await fetch('/api/upload', {
         method: 'POST',
-        body: formData,
+        body: formDataPayload,
       });
 
       const result = await response.json();
@@ -64,10 +84,15 @@ export default function UploadForm() {
 
       toast({
         title: "Upload Successful!",
-        description: `File '${data.file[0].name}' is now available with keyword '${data.keyword}'.`,
-        variant: "default", // ShadCN toast default variant has greenish accent in some themes
+        description: `File '${data.file[0].name}' is now available with keyword '${keywordToSubmit}'.`,
+        variant: "default",
       });
-      setUploadedFileLink(`/${data.keyword}`);
+      
+      if (onUploadSuccess) {
+        onUploadSuccess(keywordToSubmit);
+      } else {
+        setUploadedFileLink(`/${keywordToSubmit}`);
+      }
       reset();
     } catch (error: any) {
       toast({
@@ -83,8 +108,13 @@ export default function UploadForm() {
   return (
     <Card className="w-full shadow-xl border-primary/20">
       <CardHeader>
-        <CardTitle className="text-2xl text-primary">Share a File</CardTitle>
-        <CardDescription>Enter a keyword and select your file to upload. Max file size: ${MAX_FILE_SIZE / (1024*1024)}MB.</CardDescription>
+        <CardTitle className="text-2xl text-primary">
+          {fixedKeyword ? `Upload for "${fixedKeyword}"` : "Share a File"}
+        </CardTitle>
+        <CardDescription>
+          {fixedKeyword ? `Select your file to associate with "${fixedKeyword}".` : "Enter a keyword and select your file to upload."}
+          {' '}Max file size: ${MAX_FILE_SIZE / (1024*1024)}MB.
+        </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-6">
@@ -94,7 +124,8 @@ export default function UploadForm() {
               id="keyword" 
               {...register('keyword')} 
               placeholder="e.g., project-alpha-files" 
-              className={errors.keyword ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}
+              readOnly={!!fixedKeyword}
+              className={`${errors.keyword ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'} ${fixedKeyword ? 'bg-muted/50 cursor-not-allowed' : ''}`}
               aria-invalid={errors.keyword ? "true" : "false"}
             />
             {errors.keyword && <p className="text-sm text-destructive">{errors.keyword.message}</p>}
@@ -106,13 +137,13 @@ export default function UploadForm() {
               id="file" 
               type="file" 
               {...register('file')} 
-              className={`pt-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 ${errors.file ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}`}
+              className={`pt-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${selectedFile && selectedFile.length > 0 ? 'file:bg-accent file:text-accent-foreground' : 'file:bg-primary/10 file:text-primary hover:file:bg-primary/20'} ${errors.file ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}`}
               aria-invalid={errors.file ? "true" : "false"}
             />
             {errors.file && <p className="text-sm text-destructive">{errors.file.message}</p>}
           </div>
 
-           {uploadedFileLink && origin && (
+           {uploadedFileLink && origin && !onUploadSuccess && (
             <div className="p-4 bg-accent/10 border border-accent rounded-md text-accent-foreground flex items-start gap-3">
               <Link2 className="h-5 w-5 text-accent shrink-0 mt-1" />
               <div>
