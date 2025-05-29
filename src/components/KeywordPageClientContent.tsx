@@ -1,15 +1,16 @@
 
 "use client";
 
-import { useState, useEffect, type ChangeEvent } from 'react';
+import { useState, useEffect } from 'react';
 import type { StoredFile } from '@/lib/fileStore';
 import UploadForm from '@/components/UploadForm';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { DownloadCloud, FileText, Trash2, Loader2, Files, Paperclip, XCircle } from 'lucide-react';
-import Link from "next/link";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { DownloadCloud, FileText, Trash2, Loader2, Files, Package, AlertTriangle, CalendarClock } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface KeywordPageClientContentProps {
   initialFilesData: StoredFile[] | null;
@@ -28,7 +29,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       setBaseUrl(window.location.origin);
     }
   }, []);
-  
+
   const isMockFileDisplayed = currentFiles.length === 1 && currentFiles[0].fileName === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0);
 
   useEffect(() => {
@@ -37,7 +38,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         keyword: keyword,
         fileName: 'sample-demonstration-file.pdf',
         contentType: 'application/pdf',
-        size: 780 * 1024, 
+        size: 780 * 1024,
         uploadedAt: new Date(),
       };
       setCurrentFiles([mockDemoFile]);
@@ -54,10 +55,10 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: `Failed to fetch files: ${res.statusText}` }));
         if (res.status === 404) {
-             setCurrentFiles([]); 
+          setCurrentFiles([]);
         } else {
-            toast({ title: "Error", description: errorData.error || `Failed to fetch files: ${res.statusText}`, variant: "destructive" });
-            setCurrentFiles([]); 
+          toast({ title: "Error", description: errorData.error || `Failed to fetch files: ${res.statusText}`, variant: "destructive" });
+          setCurrentFiles([]);
         }
       } else {
         const data: StoredFile[] = await res.json();
@@ -65,7 +66,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message || 'Failed to fetch files data.', variant: "destructive" });
-      setCurrentFiles([]); 
+      setCurrentFiles([]);
     } finally {
       setIsActionLoading(prev => ({ ...prev, pageRefresh: false }));
     }
@@ -74,7 +75,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
   const handleDeleteSingleFile = async (fileNameToDelete: string) => {
     setIsActionLoading(prev => ({ ...prev, [fileNameToDelete]: true }));
     try {
-      if (fileNameToDelete === 'sample-demonstration-file.pdf' && (initialFilesData === null || initialFilesData.length === 0)) {
+      if (fileNameToDelete === 'sample-demonstration-file.pdf' && isMockFileDisplayed) {
         setCurrentFiles([]);
         toast({ title: "Sample Cleared", description: "Sample demonstration file removed from view." });
         return;
@@ -86,7 +87,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         throw new Error(result.error || `Failed to delete file: ${res.statusText}`);
       }
       toast({ title: "File Deleted", description: `"${fileNameToDelete}" removed from keyword "${keyword}".` });
-      await handleFetchFilesData(); 
+      await handleFetchFilesData();
     } catch (e: any) {
       toast({ title: "Deletion Failed", description: e.message || 'Could not delete file.', variant: "destructive" });
     } finally {
@@ -109,7 +110,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         throw new Error(result.error || `Failed to delete all files: ${res.statusText}`);
       }
       toast({ title: "All Files Deleted", description: `All files for keyword "${keyword}" have been removed.` });
-      setCurrentFiles([]); 
+      setCurrentFiles([]);
     } catch (e: any) {
       toast({ title: "Deletion Failed", description: e.message || 'Could not delete all files.', variant: "destructive" });
     } finally {
@@ -119,203 +120,211 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
 
   const handleDownloadAllFiles = () => {
     if (isMockFileDisplayed) {
-        toast({
-            title: "Sample Files",
-            description: "This is a sample demonstration. For actual files, a ZIP download would be initiated.",
-            variant: "default"
-        });
-        return;
+      toast({
+        title: "Sample Files",
+        description: "This is a sample demonstration. For actual files, a ZIP download would be initiated.",
+        variant: "default"
+      });
+      return;
     }
     if (currentFiles.length === 0) {
-        toast({
-            title: "No Files",
-            description: "There are no files to download for this keyword.",
-            variant: "default"
-        });
-        return;
+      toast({
+        title: "No Files",
+        description: "There are no files to download for this keyword.",
+        variant: "default"
+      });
+      return;
     }
     setIsActionLoading(prev => ({ ...prev, downloadAll: true }));
-    // Open the API endpoint in a new tab/window to trigger download
     window.open(`/api/download/all/${keyword}`, '_blank');
-    // We don't have a direct way to know when the download finishes from window.open,
-    // so we'll reset the loading state after a short delay.
     setTimeout(() => {
-         setIsActionLoading(prev => ({ ...prev, downloadAll: false }));
-         toast({
-            title: "Download Initiated",
-            description: `Preparing a ZIP archive for all files under keyword "${keyword}". Your browser will prompt you shortly.`,
-        });
+      setIsActionLoading(prev => ({ ...prev, downloadAll: false }));
+      toast({
+        title: "Download Initiated",
+        description: `Preparing a ZIP archive for all files under keyword "${keyword}". Your browser will prompt you shortly.`,
+      });
     }, 1500);
   };
 
-  if (isLoadingPage || isActionLoading['pageRefresh']) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center min-h-[calc(100vh-200px)]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">Loading files information...</p>
-      </div>
-    );
-  }
-
-
   const getConceptualDownloadUrl = (fileName: string) => {
     if (fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) {
-      return '#'; 
+      return '#';
     }
-    // This URL is conceptual for actual files.
-    return `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`; // This endpoint does not actually exist yet
+    // In a real app, this would point to a FastAPI or other backend that serves the file.
+    // For this demo, it's conceptual for individual files, as /api/download/all handles zipping.
+    return `${baseUrl}/project-files/${keyword}/${encodeURIComponent(fileName)}`; // Placeholder
   };
 
-
   return (
-    <div className="max-w-3xl mx-auto py-8">
-      
-      <Card className="w-full shadow-xl border-primary/20 mb-8">
-        <CardHeader>
-          <CardTitle className="text-2xl text-primary">Add File(s) to "{keyword}"</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <UploadForm
-            fixedKeyword={keyword}
-            onUploadSuccess={async (uploadedKeyword, summary) => {
-              toast({
-                title: "Upload Processed",
-                description: `${summary} for keyword "${uploadedKeyword}". Refreshing list...`,
-              });
-              await handleFetchFilesData(); // Refresh the list
-            }}
-          />
-        </CardContent>
-      </Card>
+    <div className="py-6 md:py-8 px-2">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 md:mb-8 gap-3 sm:gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold text-primary">Folder: {keyword}</h1>
+        <div className="flex gap-2 flex-shrink-0 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadAllFiles}
+            disabled={isActionLoading['downloadAll'] || currentFiles.length === 0 || isMockFileDisplayed}
+            className="flex-1 sm:flex-none border-primary text-primary hover:bg-primary/10"
+          >
+            {isActionLoading['downloadAll'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
+            Download All
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isActionLoading['deleteAll'] || currentFiles.length === 0 || isMockFileDisplayed}
+                className="flex-1 sm:flex-none border-destructive text-destructive hover:bg-destructive/10"
+              >
+                {isActionLoading['deleteAll'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete All
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action will permanently delete all {currentFiles.length} file(s) for keyword "{keyword}".
+                  {(isMockFileDisplayed) ? " This will clear the sample file from view." : " This cannot be undone."}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAllFiles} className="bg-destructive hover:bg-destructive/90">
+                  Yes, delete all
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </div>
 
-      {currentFiles && currentFiles.length > 0 ? (
-        <Card className="mb-8 shadow-xl border-primary/20">
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-              <CardTitle className="text-2xl text-primary">
-                Stored Files ({currentFiles.length})
-              </CardTitle>
-              <div className="flex gap-2 flex-wrap">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleDownloadAllFiles}
-                  disabled={isActionLoading['downloadAll'] || (currentFiles.length === 0 || isMockFileDisplayed)}
-                >
-                  {isActionLoading['downloadAll'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
-                  Download All
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive" 
-                      size="sm" 
-                      disabled={isActionLoading['deleteAll'] || currentFiles.length === 0 || isMockFileDisplayed }
-                    >
-                      {isActionLoading['deleteAll'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                      Delete All
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action will permanently delete all {currentFiles.length} file(s) for keyword "{keyword}". 
-                        {(isMockFileDisplayed) ? " This will clear the sample file from view." : "This cannot be undone."}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeleteAllFiles} className="bg-destructive hover:bg-destructive/90">
-                        Yes, delete all
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {currentFiles.map((file) => (
-              <Card key={file.fileName} className="p-4 border-border hover:shadow-md transition-shadow">
-                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                  <div className="flex-grow min-w-0">
-                    <h3 className="text-lg font-semibold text-primary break-all flex items-center">
-                      <FileText className="h-5 w-5 mr-2 shrink-0" /> {file.fileName}
-                    </h3>
+      {/* Main Two-Column Section */}
+      <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+        {/* Left Column: File List */}
+        <div className="md:w-1/2 lg:w-3/5">
+          {isLoadingPage || isActionLoading['pageRefresh'] ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="p-4 shadow-sm bg-card rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center space-x-3 flex-grow min-w-0">
+                      <Skeleton className="h-5 w-5 rounded-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Skeleton className="h-8 w-24 rounded-md" />
+                      <Skeleton className="h-8 w-24 rounded-md" />
+                    </div>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0 sm:flex-col md:flex-row items-stretch">
-                    <Button 
-                      asChild={!(file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed)} 
-                      variant="outline" 
-                      size="sm" 
-                      className="flex-grow sm:flex-grow-0"
-                      onClick={() => {
-                        if (file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) {
-                           toast({ title: "Sample File", description: "This is a sample file. Actual download would occur for real files." });
-                        }
-                      }}
-                    >
-                      <Link 
-                        href={getConceptualDownloadUrl(file.fileName)} 
-                        target={ (file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) ? "_self" : "_blank" }
-                        rel="noopener noreferrer"
-                        // Individual file download link is conceptual and points to a non-existent API
-                        // It's kept for UI demonstration purposes.
-                        // The actual download for individual files relies on the "Public Access URL" mentioned in the PRD
-                        // which is `https://www.project.com/{keyword}` -- this would lead to the (external) FastAPI service.
-                        // For this button, we simulate a direct download link.
+                </Card>
+              ))}
+            </div>
+          ) : currentFiles && currentFiles.length > 0 ? (
+            <div className="space-y-3 max-h-[calc(100vh-280px)] md:max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
+              {currentFiles.map((file) => (
+                <Card key={file.fileName} className="shadow-sm hover:shadow-md transition-shadow duration-150 bg-card rounded-lg">
+                  <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3">
+                    <TooltipProvider delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center flex-grow min-w-0 mr-2">
+                            <FileText className="h-5 w-5 mr-2 sm:mr-3 text-primary shrink-0" />
+                            <p className="text-sm sm:text-md font-medium text-foreground truncate">{file.fileName}</p>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start">
+                          <p>{file.fileName}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <div className="flex gap-2 mt-2 sm:mt-0 flex-shrink-0 w-full sm:w-auto">
+                      <Button
+                        asChild={!(file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed)}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 sm:flex-none"
+                        onClick={() => {
+                          if (file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) {
+                            toast({ title: "Sample File", description: "This is a sample file. Actual download occurs for real files." });
+                          }
+                        }}
                       >
-                        <DownloadCloud className="h-4 w-4" /> <span className="ml-2 hidden sm:inline">Download</span>
-                      </Link>
-                    </Button>
-                    <AlertDialog>
+                        <a // Changed to <a> for direct link
+                          href={getConceptualDownloadUrl(file.fileName)}
+                          target={(file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) ? "_self" : "_blank"}
+                          rel="noopener noreferrer"
+                          className="flex items-center" // Ensure icon and text are aligned if Link was doing it
+                        >
+                          <DownloadCloud className="h-4 w-4" />
+                          <span className="ml-1.5 hidden sm:inline">Download</span>
+                        </a>
+                      </Button>
+                      <AlertDialog>
                         <AlertDialogTrigger asChild>
-                           <Button variant="destructive" size="sm" disabled={isActionLoading[file.fileName]} className="flex-grow sm:flex-grow-0">
-                                {isActionLoading[file.fileName] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                <span className="ml-2 hidden sm:inline">Delete</span>
-                            </Button>
+                          <Button variant="outline" size="sm" disabled={isActionLoading[file.fileName]} className="flex-1 sm:flex-none text-destructive border-destructive hover:bg-destructive/10">
+                            {isActionLoading[file.fileName] ? <Loader2 className="mr-0 sm:mr-1.5 h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            <span className="ml-1.5 hidden sm:inline">Delete</span>
+                          </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
-                        <AlertDialogHeader>
+                          <AlertDialogHeader>
                             <AlertDialogTitle>Delete "{file.fileName}"?</AlertDialogTitle>
                             <AlertDialogDescription>
-                            This action will permanently delete the file "{file.fileName}" for keyword "{keyword}".
-                            {file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed && " This is a sample file; deleting it here will remove it from the view. Real files require backend deletion."}
-                            This cannot be undone for real files.
+                              This action will permanently delete the file "{file.fileName}" for keyword "{keyword}".
+                              {file.fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed && " This is a sample file; deleting it here will remove it from the view. Real files require backend deletion."}
+                              This cannot be undone for real files.
                             </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction onClick={() => handleDeleteSingleFile(file.fileName)} className="bg-destructive hover:bg-destructive/90">
-                                Yes, delete file
+                              Yes, delete file
                             </AlertDialogAction>
-                        </AlertDialogFooter>
+                          </AlertDialogFooter>
                         </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="w-full shadow-lg border-primary/20 mb-8">
-            <CardHeader>
-                <CardTitle className="text-center text-xl text-primary">No Files for "{keyword}"</CardTitle>
+                      </AlertDialog>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="shadow-sm bg-card rounded-lg">
+              <CardContent className="p-6 text-center">
+                <Files className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-lg font-medium text-muted-foreground">No files found in this folder.</p>
+                <p className="text-sm text-muted-foreground mt-1">Use the upload section to add files.</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Right Column: Upload Area */}
+        <div className="md:w-1/2 lg:w-2/5">
+          <Card className="shadow-md border-primary/10 rounded-lg bg-card">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl md:text-2xl font-semibold text-primary">Upload File(s)</CardTitle>
             </CardHeader>
-            <CardContent>
-                <p className="text-center text-muted-foreground">
-                    There are currently no files associated with this keyword.
-                    You can add files using the form above.
-                </p>
+            <CardContent className="pt-0 p-4 sm:p-6">
+              <UploadForm
+                fixedKeyword={keyword}
+                onUploadSuccess={async (uploadedKeyword, summary) => {
+                  toast({
+                    title: "Upload Processed",
+                    description: `${summary}. Refreshing list...`,
+                  });
+                  await handleFetchFilesData();
+                }}
+              />
             </CardContent>
-         </Card>
-      )}
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
     
-
-    
-
