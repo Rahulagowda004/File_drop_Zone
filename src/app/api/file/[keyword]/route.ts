@@ -1,14 +1,18 @@
-import { type NextRequest, NextResponse } from 'next/server';
-import { uploadedFiles, type StoredFile } from '@/lib/fileStore';
+import { type NextRequest, NextResponse } from "next/server";
+import { uploadedFiles, type StoredFile } from "@/lib/fileStore";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { keyword: string } }
 ) {
-  const keyword = params.keyword;
+  // Await params to resolve the dynamic params
+  const { keyword } = await params;
 
   if (!keyword) {
-    return NextResponse.json({ error: 'Keyword parameter is missing.' }, { status: 400 });
+    return NextResponse.json(
+      { error: "Keyword parameter is missing." },
+      { status: 400 }
+    );
   }
 
   const filesData = uploadedFiles.get(keyword);
@@ -18,9 +22,12 @@ export async function GET(
     // Client can differentiate based on whether it expects the keyword to exist.
     // For consistency, let's return 404 if the keyword itself is not in the map.
     if (!uploadedFiles.has(keyword)) {
-        return NextResponse.json({ error: 'Keyword not found or has expired.' }, { status: 404 });
+      return NextResponse.json(
+        { error: "Keyword not found or has expired." },
+        { status: 404 }
+      );
     }
-    return NextResponse.json([], { status: 200 }); // Keyword exists, but no files (e.g., all deleted individually)
+    return NextResponse.json([]); // Empty array if keyword exists but has no files
   }
 
   return NextResponse.json(filesData, { status: 200 });
@@ -31,17 +38,24 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { keyword: string } }
 ) {
-  const keyword = params.keyword;
+  // Await params to resolve the dynamic params
+  const { keyword } = await params;
 
   if (!keyword) {
-    return NextResponse.json({ error: 'Keyword parameter is missing.' }, { status: 400 });
+    return NextResponse.json(
+      { error: "Keyword parameter is missing." },
+      { status: 400 }
+    );
   }
 
   if (uploadedFiles.has(keyword)) {
     uploadedFiles.delete(keyword);
     console.log(`All files for keyword '${keyword}' deleted successfully.`);
-    return NextResponse.json({ message: `All files for keyword '${keyword}' deleted successfully.` }, { status: 200 });
+    return NextResponse.json(
+      { message: `All files for keyword '${keyword}' deleted successfully.` },
+      { status: 200 }
+    );
   } else {
-    return NextResponse.json({ error: 'Keyword not found.' }, { status: 404 });
+    return NextResponse.json({ error: "Keyword not found." }, { status: 404 });
   }
 }
