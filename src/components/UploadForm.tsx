@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
-import { UploadCloud, Link2 } from 'lucide-react';
+import { UploadCloud, Link2, Loader2 } from 'lucide-react';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -28,16 +28,16 @@ type FormData = z.infer<typeof formSchema>;
 
 interface UploadFormProps {
   fixedKeyword?: string;
-  onUploadSuccess?: (uploadedKeyword: string) => void;
+  onUploadSuccess?: (uploadedKeyword: string, uploadedFileName: string) => void;
 }
 
 export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [uploadedFileLink, setUploadedFileLink] = useState<string | null>(null); // Only used if onUploadSuccess is not provided
+  const [uploadedFileLink, setUploadedFileLink] = useState<string | null>(null);
   const [origin, setOrigin] = useState('');
   const { toast } = useToast();
   
-  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, reset, setValue, watch, setError } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       keyword: fixedKeyword || '',
@@ -45,7 +45,6 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     }
   });
 
-  // Watch the file input to update its styling if a file is selected
   const selectedFile = watch('file');
 
   useEffect(() => {
@@ -65,7 +64,6 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
     setUploadedFileLink(null);
 
     const formDataPayload = new FormData();
-    // Use fixedKeyword if provided, otherwise use data.keyword from form
     const keywordToSubmit = fixedKeyword || data.keyword;
     formDataPayload.append('keyword', keywordToSubmit);
     formDataPayload.append('file', data.file[0]);
@@ -79,101 +77,88 @@ export default function UploadForm({ fixedKeyword, onUploadSuccess }: UploadForm
       const result = await response.json();
 
       if (!response.ok) {
+        // Handle specific error for duplicate file name for the same keyword
+        if (response.status === 409 && result.error && result.error.includes("already exists for this keyword")) {
+           setError("file", { type: "manual", message: result.error });
+        }
         throw new Error(result.error || 'File upload failed. Please try again.');
       }
-
-      toast({
-        title: "Upload Successful!",
-        description: `File '${data.file[0].name}' is now available with keyword '${keywordToSubmit}'.`,
-        variant: "default",
-      });
       
       if (onUploadSuccess) {
-        onUploadSuccess(keywordToSubmit);
+        onUploadSuccess(keywordToSubmit, data.file[0].name);
       } else {
-        setUploadedFileLink(`/${keywordToSubmit}`);
+        // This block is less likely to be used now with multi-file, but kept for standalone use
+        setUploadedFileLink(`/${keywordToSubmit}`); 
+        toast({
+            title: "Upload Successful!",
+            description: `File '${data.file[0].name}' is now available with keyword '${keywordToSubmit}'.`,
+        });
       }
-      reset();
+      reset({ keyword: fixedKeyword || '', file: undefined }); // Reset form, keeping fixedKeyword if present
     } catch (error: any) {
-      toast({
-        title: "Upload Failed",
-        description: error.message || "An unexpected error occurred. Please check your input and try again.",
-        variant: "destructive",
-      });
+      if (!(error.message && error.message.includes("already exists for this keyword"))) {
+        toast({
+            title: "Upload Failed",
+            description: error.message || "An unexpected error occurred. Please check your input and try again.",
+            variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Card className="w-full shadow-xl border-primary/20">
-      <CardHeader>
-        <CardTitle className="text-2xl text-primary">
-          {fixedKeyword ? `Upload for "${fixedKeyword}"` : "Share a File"}
-        </CardTitle>
-        <CardDescription>
-          {fixedKeyword ? `Select your file to associate with "${fixedKeyword}".` : "Enter a keyword and select your file to upload."}
-          {' '}Max file size: ${MAX_FILE_SIZE / (1024*1024)}MB.
-        </CardDescription>
-      </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="keyword" className="font-semibold">Unique Keyword</Label>
-            <Input 
-              id="keyword" 
-              {...register('keyword')} 
-              placeholder="e.g., project-alpha-files" 
-              readOnly={!!fixedKeyword}
-              className={`${errors.keyword ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'} ${fixedKeyword ? 'bg-muted/50 cursor-not-allowed' : ''}`}
-              aria-invalid={errors.keyword ? "true" : "false"}
-            />
-            {errors.keyword && <p className="text-sm text-destructive">{errors.keyword.message}</p>}
-          </div>
+    // Removed outer Card as KeywordPageClientContent now wraps forms in cards
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <div className="space-y-6"> {/* Replaced CardContent */}
+        <div className="space-y-2">
+          <Label htmlFor="keyword-uploadform" className="font-semibold">Unique Keyword</Label>
+          <Input 
+            id="keyword-uploadform" 
+            {...register('keyword')} 
+            placeholder="e.g., project-alpha-files" 
+            readOnly={!!fixedKeyword}
+            className={`${errors.keyword ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'} ${fixedKeyword ? 'bg-muted/50 cursor-not-allowed' : ''}`}
+            aria-invalid={errors.keyword ? "true" : "false"}
+          />
+          {errors.keyword && <p className="text-sm text-destructive">{errors.keyword.message}</p>}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="file" className="font-semibold">File</Label>
-            <Input 
-              id="file" 
-              type="file" 
-              {...register('file')} 
-              className={`pt-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${selectedFile && selectedFile.length > 0 ? 'file:bg-accent file:text-accent-foreground' : 'file:bg-primary/10 file:text-primary hover:file:bg-primary/20'} ${errors.file ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}`}
-              aria-invalid={errors.file ? "true" : "false"}
-            />
-            {errors.file && <p className="text-sm text-destructive">{errors.file.message}</p>}
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="file-uploadform" className="font-semibold">File</Label>
+          <Input 
+            id="file-uploadform" 
+            type="file" 
+            {...register('file')} 
+            className={`pt-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${selectedFile && selectedFile.length > 0 ? 'file:bg-accent file:text-accent-foreground' : 'file:bg-primary/10 file:text-primary hover:file:bg-primary/20'} ${errors.file ? 'border-destructive focus:ring-destructive' : 'focus:ring-primary'}`}
+            aria-invalid={errors.file ? "true" : "false"}
+          />
+          {errors.file && <p className="text-sm text-destructive">{errors.file.message}</p>}
+        </div>
 
-           {uploadedFileLink && origin && !onUploadSuccess && (
-            <div className="p-4 bg-accent/10 border border-accent rounded-md text-accent-foreground flex items-start gap-3">
-              <Link2 className="h-5 w-5 text-accent shrink-0 mt-1" />
-              <div>
-                <p className="font-medium text-accent">File uploaded successfully! Access it here:</p>
-                <Link href={uploadedFileLink} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline font-semibold break-all">
-                  {`${origin}${uploadedFileLink}`}
-                </Link>
-              </div>
+          {uploadedFileLink && origin && !onUploadSuccess && (
+          <div className="p-4 bg-accent/10 border border-accent rounded-md text-accent-foreground flex items-start gap-3">
+            <Link2 className="h-5 w-5 text-accent shrink-0 mt-1" />
+            <div>
+              <p className="font-medium text-accent">File uploaded! Access keyword page:</p>
+              <Link href={uploadedFileLink} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline font-semibold break-all">
+                {`${origin}${uploadedFileLink}`}
+              </Link>
             </div>
+          </div>
+        )}
+      </div>
+      <div className="mt-6"> {/* Replaced CardFooter */}
+        <Button type="submit" disabled={isLoading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 text-base font-semibold">
+          {isLoading ? (
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          ) : (
+            <UploadCloud className="mr-2 h-5 w-5" />
           )}
-        </CardContent>
-        <CardFooter>
-          <Button type="submit" disabled={isLoading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 text-base font-semibold">
-            {isLoading ? (
-              <div className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Uploading...
-              </div>
-            ) : (
-              <>
-                <UploadCloud className="mr-2 h-5 w-5" />
-                Upload & Share
-              </>
-            )}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+          {isLoading ? 'Uploading...' : (fixedKeyword ? 'Upload File' : 'Upload & Share')}
+        </Button>
+      </div>
+    </form>
   );
 }

@@ -7,49 +7,56 @@ function getBaseUrl() {
   if (process.env.NEXT_PUBLIC_APP_URL) {
     return process.env.NEXT_PUBLIC_APP_URL;
   }
-  // For Vercel deployments
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }
-  // Default for local development
   return 'http://localhost:9002'; // Ensure this matches your dev port
 }
 
-async function getFileData(keyword: string): Promise<StoredFile | null> {
+async function getFilesData(keyword: string): Promise<StoredFile[] | null> {
   const baseUrl = getBaseUrl();
   try {
     const res = await fetch(`${baseUrl}/api/file/${keyword}`, {
       cache: 'no-store', 
     });
-    if (!res.ok) {
-      if (res.status === 404) console.log(`File data not found for keyword: ${keyword}`);
-      else console.error(`Error fetching file data for ${keyword}: ${res.status} ${res.statusText}`);
-      return null;
+    if (res.status === 404) {
+      console.log(`No files found for keyword: ${keyword} (API returned 404)`);
+      return null; // Indicate keyword not found or no files explicitly
     }
-    return res.json();
+    if (!res.ok) {
+      console.error(`Error fetching files data for ${keyword}: ${res.status} ${res.statusText}`);
+      return null; // Or handle error differently
+    }
+    const data = await res.json();
+    return Array.isArray(data) ? data : null; // Ensure it's an array
   } catch (error) {
-    console.error(`Network or other error fetching file data for ${keyword}:`, error);
+    console.error(`Network or other error fetching files data for ${keyword}:`, error);
     return null;
   }
 }
 
 export async function generateMetadata({ params }: { params: { keyword: string } }): Promise<Metadata> {
-  const fileData = await getFileData(params.keyword);
-  if (!fileData) {
+  const filesData = await getFilesData(params.keyword);
+  const keyword = params.keyword;
+
+  if (!filesData || filesData.length === 0) {
     return {
-      title: `Upload for "${params.keyword}" | File Drop Zone`,
-      description: `No file found for keyword '${params.keyword}'. You can upload a file for this keyword.`,
+      title: `Upload to "${keyword}" | File Drop Zone`,
+      description: `No files found for keyword '${keyword}'. You can upload files for this keyword.`,
     };
   }
   return {
-    title: `Access "${fileData.fileName}" for keyword "${params.keyword}" | File Drop Zone`,
-    description: `Details for file "${fileData.fileName}" associated with keyword '${fileData.keyword}'. This file is available for a limited time.`,
+    title: `Files for "${keyword}" (${filesData.length}) | File Drop Zone`,
+    description: `Access ${filesData.length} file(s) associated with keyword '${keyword}'. Files are available for a limited time.`,
   };
 }
 
 export default async function KeywordPage({ params }: { params: { keyword: string } }) {
-  const fileData = await getFileData(params.keyword);
+  const filesData = await getFilesData(params.keyword);
   const keyword = params.keyword;
 
-  return <KeywordPageClientContent initialFileData={fileData} keyword={keyword} />;
+  // If filesData is null, it means the keyword itself wasn't found or an error occurred.
+  // If filesData is an empty array, the keyword exists but has no files.
+  // KeywordPageClientContent will handle both cases.
+  return <KeywordPageClientContent initialFilesData={filesData} keyword={keyword} />;
 }

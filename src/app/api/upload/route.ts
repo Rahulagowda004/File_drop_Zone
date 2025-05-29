@@ -24,42 +24,49 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Keyword must be between 3 and 50 characters.' }, { status: 400 });
     }
 
-    if (uploadedFiles.has(trimmedKeyword)) {
-      return NextResponse.json({ error: 'Keyword already in use. Please choose another.' }, { status: 409 });
-    }
-
     const MAX_FILE_SIZE_API = 10 * 1024 * 1024; // 10MB, should match frontend
     if (file.size > MAX_FILE_SIZE_API) {
       return NextResponse.json({ error: `File is too large. Max size is ${MAX_FILE_SIZE_API / (1024*1024)}MB.` }, { status: 413 });
     }
 
-    const fileData: StoredFile = {
+    const newFileData: StoredFile = {
       keyword: trimmedKeyword,
       fileName: file.name,
       contentType: file.type,
       size: file.size,
       uploadedAt: new Date(),
     };
-    uploadedFiles.set(trimmedKeyword, fileData);
 
-    // Simulate automatic deletion. In a real app, this would be a cron job or queue worker.
-    setTimeout(() => {
-      uploadedFiles.delete(trimmedKeyword);
-      console.log(`Mock Deletion: Metadata for keyword '${trimmedKeyword}' (file: ${file.name}) automatically deleted after 24 hours.`);
-    }, 24 * 60 * 60 * 1000); // 24 hours
+    let keywordExisted = uploadedFiles.has(trimmedKeyword);
+    let filesForKeyword = uploadedFiles.get(trimmedKeyword) || [];
+
+    // Check if a file with the same name already exists for this keyword
+    if (filesForKeyword.some(f => f.fileName === newFileData.fileName)) {
+      return NextResponse.json({ error: `A file named "${newFileData.fileName}" already exists for this keyword. Please use a different file name or keyword.` }, { status: 409 });
+    }
+
+    filesForKeyword.push(newFileData);
+    uploadedFiles.set(trimmedKeyword, filesForKeyword);
+
+    // Set timeout for keyword deletion only if it's a new keyword
+    if (!keywordExisted) {
+      setTimeout(() => {
+        uploadedFiles.delete(trimmedKeyword);
+        console.log(`Mock Deletion: All files for keyword '${trimmedKeyword}' automatically deleted after 24 hours.`);
+      }, 24 * 60 * 60 * 1000); // 24 hours
+    }
 
     return NextResponse.json({ 
-      message: 'File metadata stored successfully. File will be available for 24 hours.', 
+      message: `File '${newFileData.fileName}' added to keyword '${trimmedKeyword}'. Keyword active for 24 hours from first upload.`, 
       keyword: trimmedKeyword, 
-      fileName: file.name 
+      fileName: newFileData.fileName 
     }, { status: 201 });
 
   } catch (error: any) {
     console.error('Upload API error:', error);
-    // Check if it's a known error type or provide a generic message
     let errorMessage = 'Internal server error during upload.';
     if (error instanceof Error) {
-      // Potentially more specific errors could be caught here if thrown by formData parsing, etc.
+       errorMessage = error.message;
     }
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
