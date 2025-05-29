@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { DownloadCloud, FileText, Trash2, Loader2, Files, Package, Home, UploadCloud, CalendarClock } from 'lucide-react';
+import { DownloadCloud, FileText, Trash2, Loader2, Files, CalendarClock } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow, format } from 'date-fns';
@@ -47,8 +47,8 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
         keyword: keyword,
         fileName: 'sample-demonstration-file.pdf',
         contentType: 'application/pdf',
-        size: 780 * 1024, // Approx 0.76 MB
-        uploadedAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // Mock uploaded 2 hours ago
+        size: 780 * 1024, 
+        uploadedAt: new Date(Date.now() - 2 * 60 * 60 * 1000), 
       };
       setCurrentFiles([mockDemoFile]);
     } else {
@@ -62,11 +62,11 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     try {
       const res = await fetch('/api/file/' + keyword, { cache: 'no-store' });
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: `Failed to fetch files: ${res.statusText}` }));
+        const errorData = await res.json().catch(() => ({ error: "Failed to fetch files: " + res.statusText }));
         if (res.status === 404) {
           setCurrentFiles([]);
         } else {
-          toast({ title: "Error", description: errorData.error || `Failed to fetch files: ${res.statusText}`, variant: "destructive" });
+          toast({ title: "Error", description: errorData.error || "Failed to fetch files: " + res.statusText, variant: "destructive" });
           setCurrentFiles([]);
         }
       } else {
@@ -93,7 +93,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       const res = await fetch(`/api/file/${keyword}/delete?fileName=${encodeURIComponent(fileNameToDelete)}`, { method: 'DELETE' });
       const result = await res.json();
       if (!res.ok) {
-        throw new Error(result.error || `Failed to delete file: ${res.statusText}`);
+        throw new Error(result.error || "Failed to delete file: " + res.statusText);
       }
       toast({ title: "File Deleted", description: `"${fileNameToDelete}" removed from keyword "${keyword}".` });
       await handleFetchFilesData(); 
@@ -116,7 +116,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
       const res = await fetch(`/api/file/${keyword}`, { method: 'DELETE' });
       const result = await res.json();
       if (!res.ok) {
-        throw new Error(result.error || `Failed to delete all files: ${res.statusText}`);
+        throw new Error(result.error || "Failed to delete all files: " + res.statusText);
       }
       toast({ title: "All Files Deleted", description: `All files for keyword "${keyword}" have been removed.` });
       setCurrentFiles([]); 
@@ -160,7 +160,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     if (fileName === 'sample-demonstration-file.pdf' && isMockFileDisplayed) {
       return '#'; 
     }
-    return `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`; // Placeholder - actual single file download not implemented
+    return `${baseUrl}/api/download/${keyword}/${encodeURIComponent(fileName)}`; // Placeholder - actual single file download NOT implemented
   };
 
 
@@ -236,41 +236,37 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
             {isLoadingPage || isActionLoading['pageRefresh'] ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <Card key={i} className="p-4 shadow-sm bg-card rounded-lg">
+                  <Card key={i} className="p-3 shadow-sm bg-card rounded-lg">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center space-x-3 flex-grow min-w-0">
                         <Skeleton className="h-5 w-5 rounded-full" />
                         <Skeleton className="h-4 w-3/4" />
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
-                        <Skeleton className="h-8 w-24 rounded-md" />
-                        <Skeleton className="h-8 w-24 rounded-md" />
+                        <Skeleton className="h-8 w-20 rounded-md" />
+                        <Skeleton className="h-8 w-20 rounded-md" />
                       </div>
                     </div>
-                    <Skeleton className="h-3 w-1/2 mt-2" /> 
                   </Card>
                 ))}
               </div>
             ) : currentFiles && currentFiles.length > 0 ? (
-              <div className="space-y-3 max-h-[calc(100vh-320px)] md:max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[calc(100vh-320px)] md:max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
                 {currentFiles.map((file) => (
                   <Card key={file.fileName} className="shadow-sm hover:shadow-md transition-shadow duration-150 bg-card rounded-lg">
-                    <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3">
+                    <CardContent className="p-2 sm:p-3 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3">
                       <div className="flex-grow min-w-0 mr-2">
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="flex items-center">
-                              <FileText className="h-5 w-5 mr-2 sm:mr-3 text-primary shrink-0" />
-                              <p className="text-sm sm:text-md font-medium text-foreground truncate">{file.fileName}</p>
+                              <FileText className="h-4 w-4 mr-2 sm:mr-3 text-primary shrink-0" />
+                              <p className="text-sm font-medium text-foreground truncate">{file.fileName}</p>
                             </div>
                           </TooltipTrigger>
                           <TooltipContent side="top" align="start">
                             <p>{file.fileName}</p>
                           </TooltipContent>
                         </Tooltip>
-                        <p className="text-xs text-muted-foreground mt-1 ml-7 sm:ml-8">
-                          {formatFileSize(file.size)} · Uploaded {formatDistanceToNow(file.uploadedAt, { addSuffix: true })}
-                        </p>
                       </div>
                       <div className="flex gap-2 mt-2 sm:mt-0 flex-shrink-0 w-full sm:w-auto">
                         <Tooltip>
@@ -338,7 +334,7 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
                 <CardContent className="p-6 text-center">
                   <Files className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
                   <p className="text-lg font-medium text-muted-foreground">No files found in this folder.</p>
-                  <p className="text-sm text-muted-foreground mt-1">Use the upload section above to add files.</p>
+                  <p className="text-sm text-muted-foreground mt-1">Use the upload section to add files.</p>
                 </CardContent>
               </Card>
             )}
@@ -348,5 +344,3 @@ export default function KeywordPageClientContent({ initialFilesData, keyword }: 
     </TooltipProvider>
   );
 }
-
-    
