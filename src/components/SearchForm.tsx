@@ -17,7 +17,7 @@ export default function SearchForm() {
     }
   };
 
-return (
+  return (
   <form onSubmit={handleSubmit} className="w-full max-w-lg flex gap-2 items-center animate-fadeIn">
     <Input
       type="text"

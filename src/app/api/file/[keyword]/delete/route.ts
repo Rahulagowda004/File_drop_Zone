@@ -37,7 +37,7 @@ export async function DELETE(
     // Get remaining files count
     const remainingFiles = await getFilesByKeyword(keyword);
     const remainingCount = remainingFiles ? remainingFiles.length : 0;
-    
+
     if (remainingCount === 0) {
       console.log(`Last file removed from keyword '${keyword}'`);
     }
@@ -49,4 +49,11 @@ export async function DELETE(
       },
       { status: 200 }
     );
+  } catch (error) {
+    console.error("Error deleting file:", error);
+    return NextResponse.json(
+      { error: "Failed to delete file. Please try again." },
+      { status: 500 }
+    );
+  }
 }
